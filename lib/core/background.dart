@@ -7,21 +7,21 @@ abstract class CanvasBackground {
 
   /// draw the backround on this context. Implement this to have
   /// different kinds of backgrounds
-  void paint(Canvas canvas, Offset offset, double scale, Size canvasSize);
+  void paint(Canvas canvas, Size canvasSize);
 }
 
 class NoBackground extends CanvasBackground {
   const NoBackground();
 
   @override
-  void paint(Canvas canvas, Offset offset, double scale, Size canvasSize) {}
+  void paint(Canvas canvas, Size canvasSize) {}
 }
 
 class SingleColorBackround extends CanvasBackground {
   const SingleColorBackround(Color backgroundColor) : super(bgColor: backgroundColor);
 
   @override
-  void paint(Canvas canvas, Offset offset, double scale, Size canvasSize) {
+  void paint(Canvas canvas, Size canvasSize) {
     final paint = Paint()
       ..color = bgColor
       ..style = PaintingStyle.fill;
