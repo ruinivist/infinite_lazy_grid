@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:infinite_lazy_2d_grid/core/controller.dart';
 import 'package:infinite_lazy_2d_grid/infinite_lazy_2d_grid.dart';
 
 class App extends StatefulWidget {
@@ -9,20 +10,21 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
+  final CanvasController controller = CanvasController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    controller.addChild(const Offset(100, 100), () => const InfoContainer(color: Colors.red));
+    controller.addChild(const Offset(200, 200), () => const InfoContainer(color: Colors.green));
+    controller.addChild(const Offset(300, 300), () => const InfoContainer(color: Colors.blue));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SizedBox.expand(
-        child: CanvasView(
-          ssPositions: [Offset(100, 100), Offset(200, 200), Offset(300, 300)],
-          canvasBackground: SingleColorBackround(Colors.white),
-          children: [
-            InfoContainer(color: Colors.red),
-            InfoContainer(color: Colors.green),
-            InfoContainer(color: Colors.blue),
-          ],
-        ),
-      ),
+      body: CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
     );
   }
 }
