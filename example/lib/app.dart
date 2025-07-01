@@ -10,7 +10,7 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
-  final CanvasController controller = CanvasController();
+  final CanvasController controller = CanvasController(debug: true);
 
   @override
   void initState() {
