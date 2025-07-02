@@ -6,4 +6,8 @@ extension OffsetCartesionOps on Offset {
     final dy = this.dy - other.dy;
     return dx * dx + dy * dy;
   }
+
+  Offset operator -(Offset other) {
+    return Offset(dx - other.dx, dy - other.dy);
+  }
 }
