@@ -10,4 +10,8 @@ extension OffsetCartesionOps on Offset {
   Offset operator -(Offset other) {
     return Offset(dx - other.dx, dy - other.dy);
   }
+
+  String coord() {
+    return '(${dx.toStringAsFixed(2)}, ${dy.toStringAsFixed(2)})';
+  }
 }

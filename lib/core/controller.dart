@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:infinite_lazy_2d_grid/utils/conversions.dart';
+import 'package:infinite_lazy_2d_grid/utils/styles.dart';
 
 // ------------------------------ Public Types -------------------------------
 
@@ -25,6 +26,12 @@ class CanvasController with ChangeNotifier {
   int _nextId = 0; // surely we won't run out of IDs, Clueless
   Offset _gsTopLeftOffset = Offset.zero;
   final Map<int, _CanvasItem> _children = {}; // int for IDs
+  bool debug;
+
+  CanvasController({this.debug = false});
+
+  // -------------------- getters --------------------
+  Offset get offset => _gsTopLeftOffset;
 
   // -------------------- public functions --------------------
 
@@ -70,9 +77,38 @@ class CanvasController with ChangeNotifier {
   }
 
   List<(Offset, Widget)> widgetsWithScreenPositions() {
-    return _children.values.map((item) {
+    return _children.entries.map((entry) {
+      final item = entry.value;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset);
-      return (ssPosition, item.builder());
+      var child = item.builder();
+      if (debug) child = _Debug(id: entry.key, gs: item.gsPosition, ss: ssPosition, child: child);
+      return (ssPosition, child);
     }).toList();
+  }
+}
+
+class _Debug extends StatelessWidget {
+  final int id;
+  final Offset gs, ss;
+  final Widget child;
+
+  const _Debug({required this.id, required this.gs, required this.ss, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          left: 0,
+          bottom: -60,
+          child: Text(
+            'ID: $id\nGS:(${gs.dx.toInt()},${gs.dy.toInt()})\nSS:(${ss.dx.toInt()},${ss.dy.toInt()})',
+            style: monospaceStyle,
+          ),
+        ),
+      ],
+    );
   }
 }

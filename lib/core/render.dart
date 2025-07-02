@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:infinite_lazy_2d_grid/core/controller.dart';
+import 'package:infinite_lazy_2d_grid/utils/offset_extensions.dart';
+import 'package:infinite_lazy_2d_grid/utils/styles.dart';
 
 import 'background.dart';
 
@@ -28,11 +30,26 @@ class CanvasView extends StatelessWidget {
             final childrenWithPositions = controller.widgetsWithScreenPositions();
             final ssPositions = childrenWithPositions.map((e) => e.$1).toList();
             final children = childrenWithPositions.map((e) => e.$2).toList();
-            return _CanvasRenderObject(
+            final canvas = _CanvasRenderObject(
               canvasBackground: canvasBackground,
               ssPositions: ssPositions,
               children: children,
             );
+
+            if (controller.debug) {
+              return Stack(
+                children: [
+                  canvas,
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Text('Offset: ${controller.offset.coord()}', style: monospaceStyle),
+                  ),
+                ],
+              );
+            } else {
+              return canvas;
+            }
           },
         ),
       ),
