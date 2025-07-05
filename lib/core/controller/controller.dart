@@ -14,9 +14,8 @@ class CanvasController with ChangeNotifier {
   double _baseScale, _scale;
   late Size _canvasSize;
   final Map<int, _ChildInfo> _children = {}; // int for IDs
-  final Offset? buildCacheExtent;
-  late final Offset _buildExtent;
-  final Offset _initialBuildExtent;
+  final Offset? _buildCacheExtent;
+  late Offset _buildExtent;
   final Size _hashCellSize;
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
@@ -26,13 +25,14 @@ class CanvasController with ChangeNotifier {
   CanvasController({
     double initialScale = 1,
     this.debug = false,
-    this.buildCacheExtent,
-    Size hashCellSize = const Size(200, 200),
-    Offset initialBuildExtent = const Offset(1000, 1000),
+    Offset? buildCacheExtent,
+    Size hashCellSize = const Size(100, 100),
   }) : _scale = initialScale,
        _baseScale = initialScale,
        _hashCellSize = hashCellSize,
-       _initialBuildExtent = initialBuildExtent,
+       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null,
+       // only top left is considered to if a widget has long width, it'll not be rendered
+       // unless the cache extent is sufficient
        assert(initialScale > 0, 'Initial scale must be greater than 0') {
     _spatialHash = SpatialHashing<int>(cellSize: _hashCellSize);
   }
@@ -48,13 +48,16 @@ class CanvasController with ChangeNotifier {
 
   /// Update the canvas size when the widget size changes.
   void onCanvasSizeChange(Size size) {
+    if (size == Size.zero) return; // ignore the zero side, linux first build pass error
     if (_init && size == _canvasSize) return;
 
+    _buildExtent = Offset(size.width, size.height) + (_buildCacheExtent ?? Offset(size.width * 0.1, size.height * 0.1));
     _canvasSize = size; // allow resize due to canvas resize
+
+    // if the first init, re-render as not I have the canvas size to build widgets
     if (!_init) {
-      _buildExtent =
-          Offset(size.width, size.height) + (buildCacheExtent ?? Offset(size.width * 0.5, size.height * 0.5));
       _init = true;
+      Future.microtask(notifyListeners);
     }
   }
 
@@ -138,9 +141,10 @@ class CanvasController with ChangeNotifier {
 
   /// Currently rendered widgets with their position info
   List<ChildInfo> widgetsWithScreenPositions() {
-    final idsToBuild = _init
-        ? _childrenWithinBuildArea(_gsCenter, _buildExtent)
-        : _childrenWithinBuildArea(Offset.zero, _initialBuildExtent);
+    if (!_init) return [];
+
+    final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
+    print("building ${idsToBuild.length} widgets at ${_gsCenter.toPoint()} with extent ${_buildExtent.toPoint()}");
 
     return idsToBuild.map((id) {
       final item = _children[id]!;
@@ -152,7 +156,8 @@ class CanvasController with ChangeNotifier {
   }
 
   List<int> _childrenWithinBuildArea(Offset center, Offset extent) {
-    final items = _spatialHash.getPointsAround(center.toPoint(), extent);
+    Offset halfExtent = Offset((extent.dx / (2 * _scale)).ceilToDouble(), (extent.dy / (2 * _scale)).ceilToDouble());
+    final items = _spatialHash.getPointsAround(center.toPoint(), halfExtent);
     return items.map((item) => item.data).toList(); // data is the child id here
   }
 }
