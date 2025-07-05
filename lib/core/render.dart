@@ -6,11 +6,6 @@ import 'package:infinite_lazy_2d_grid/utils/styles.dart';
 
 import 'background.dart';
 
-/**
- * Working of some of the flutter code used here:
-
- */
-
 /// An infinite canvas that places all the children at the specified positions.
 class CanvasView extends StatelessWidget {
   final CanvasBackground canvasBackground;
@@ -23,16 +18,20 @@ class CanvasView extends StatelessWidget {
     return Container(
       color: canvasBackground.bgColor,
       child: GestureDetector(
-        onScaleUpdate: controller.handleGesture,
+        behavior: HitTestBehavior.translucent,
+        onScaleUpdate: controller.onScaleUpdate,
+        onScaleStart: controller.onScaleStart,
         child: ListenableBuilder(
           listenable: controller,
           builder: (_, _) {
             final childrenWithPositions = controller.widgetsWithScreenPositions();
-            final ssPositions = childrenWithPositions.map((e) => e.$1).toList();
-            final children = childrenWithPositions.map((e) => e.$2).toList();
+            final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
+            final children = childrenWithPositions.map((e) => e.child).toList();
             final canvas = _CanvasRenderObject(
               canvasBackground: canvasBackground,
               ssPositions: ssPositions,
+              scale: controller.scale,
+              onCanvasSizeChange: controller.onCanvasSizeChange,
               children: children,
             );
 
@@ -43,7 +42,10 @@ class CanvasView extends StatelessWidget {
                   Positioned(
                     top: 16,
                     left: 16,
-                    child: Text('Offset: ${controller.offset.coord()}', style: monospaceStyle),
+                    child: Text(
+                      'Offset: ${controller.offset.coord()}\nScale: ${controller.scale.toStringAsFixed(1)}',
+                      style: monospaceStyle,
+                    ),
                   ),
                 ],
               );
@@ -58,54 +60,79 @@ class CanvasView extends StatelessWidget {
 }
 
 /// A combined widget for all the render object of the children + background.
+/// Everything is in screen space here
 class _CanvasRenderObject extends MultiChildRenderObjectWidget {
   final List<Offset> ssPositions;
+  final double scale;
   final CanvasBackground canvasBackground;
+  final Function onCanvasSizeChange;
 
   const _CanvasRenderObject({
     required this.ssPositions,
-    required super.children, // children go to the MultiChildRenderObjectWidget
+    required this.scale,
     required this.canvasBackground,
-  }) : assert(ssPositions.length == children.length, 'Children and positions must have the same length');
+    required this.onCanvasSizeChange,
+    required super.children, // children go to the MultiChildRenderObjectWidget
+  }) : assert(ssPositions.length == children.length, 'Children and positions must have the same length'),
+       assert(scale != 0);
 
   @override
   RenderObject createRenderObject(BuildContext context) {
-    return _CanvasRenderBox(ssPositions: ssPositions, canvasBackground: canvasBackground);
+    return _CanvasRenderBox(
+      ssPositions: ssPositions,
+      scale: scale,
+      canvasBackground: canvasBackground,
+      onCanvasSizeChange: onCanvasSizeChange,
+    );
   }
 
   @override
   void updateRenderObject(BuildContext context, _CanvasRenderBox renderObject) {
     renderObject
       ..ssPositions = ssPositions
-      ..canvasBackground = canvasBackground;
+      ..canvasBackground = canvasBackground
+      ..scale = scale;
   }
 }
 
-/// Dummy empty parent data for each child
-class _WidgetParentData extends ContainerBoxParentData<RenderBox> {}
+class _CanvasWidgetParentData extends ContainerBoxParentData<RenderBox> {
+  // there is already an "offset" defined in BoxParentdata that is exactly what I want
+  late double scale; // scale is same for all rn but this makes it trivial to expand to children with diff scales
+}
 
 class _CanvasRenderBox extends RenderBox
     with
-        ContainerRenderObjectMixin<RenderBox, _WidgetParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, _WidgetParentData> {
+        ContainerRenderObjectMixin<RenderBox, _CanvasWidgetParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _CanvasWidgetParentData> {
   CanvasBackground _canvasBackground;
   List<Offset> _ssPositions;
+  double _scale;
+  Function onCanvasSizeChange;
 
-  _CanvasRenderBox({required ssPositions, required canvasBackground})
+  _CanvasRenderBox({required ssPositions, required scale, required canvasBackground, required this.onCanvasSizeChange})
     : _ssPositions = ssPositions,
+      _scale = scale,
       _canvasBackground = canvasBackground;
 
   @override
   void setupParentData(RenderBox child) {
-    if (child.parentData is! _WidgetParentData) {
-      child.parentData = _WidgetParentData();
+    if (child.parentData is! _CanvasWidgetParentData) {
+      child.parentData = _CanvasWidgetParentData();
     }
   }
 
   set ssPositions(List<Offset> ssPositions) {
+    assert(ssPositions.length == childCount);
     if (_ssPositions != ssPositions) {
       _ssPositions = ssPositions;
-      markNeedsPaint();
+      markNeedsLayout();
+    }
+  }
+
+  set scale(double scale) {
+    if (_scale != scale) {
+      _scale = scale;
+      markNeedsLayout();
     }
   }
 
@@ -118,59 +145,64 @@ class _CanvasRenderBox extends RenderBox
 
   @override
   void performLayout() {
+    assert(childCount == _ssPositions.length);
     size = constraints.biggest; // expand as much as possible for the parent
+    onCanvasSizeChange(size); // notify the controller about the size
 
     RenderBox? child = firstChild;
 
+    int index = 0;
     while (child != null) {
-      final _WidgetParentData parentData = child.parentData! as _WidgetParentData;
+      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+      childParentData.offset = _ssPositions[index++];
+      childParentData.scale = _scale;
       // loosen so like a stack can take it's own size inside parent
       // like a stack parent is not using size and is always expanded hence the second arg
       child.layout(constraints.loosen(), parentUsesSize: false);
-      child = parentData.nextSibling;
+      child = childParentData.nextSibling;
     }
   }
 
   @override
   void paint(PaintingContext context, Offset canvasStartOffset) {
-    final canvas = context.canvas;
-
+    assert(childCount == _ssPositions.length);
     // use the canvas background painter, pass it the canvas and that should handle drawing the background
-    _canvasBackground.paint(canvas, size);
+    _canvasBackground.paint(context.canvas, size, _scale);
 
+    // though using ssPositionns here directly worked for me but docs using the parentData
+    // to get this info is the convention as child can be reordered ( though this will always
+    // change the offset as well so should work for me ) and this is the flutter way of implementation
+    // on most other stuff ( single source of truth for paint & hit test etc )
     RenderBox? child = firstChild;
-    for (int idx = 0; child != null; idx++) {
-      final _WidgetParentData parentData = child.parentData! as _WidgetParentData;
-      context.paintChild(child, _ssPositions[idx]);
-      child = parentData.nextSibling;
+    while (child != null) {
+      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+
+      context.canvas.save();
+      // relying purely on canvas manips here
+      final drawAt = canvasStartOffset + childParentData.offset;
+      context.canvas.translate(drawAt.dx, drawAt.dy);
+      context.canvas.scale(childParentData.scale, childParentData.scale);
+      context.paintChild(child, Offset.zero); // pain at 0 as already translated
+
+      context.canvas.restore();
+      child = childParentData.nextSibling;
     }
   }
 
   @override
-  bool hitTest(BoxHitTestResult result, {required Offset position}) {
-    final ssHitPosition = position;
-
-    if (!size.contains(ssHitPosition)) {
-      return false;
-    }
-
-    // Check children in reverse order (last painted = first hit)
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     RenderBox? child = lastChild;
-    for (int idx = _ssPositions.length - 1; child != null; idx--) {
-      final _WidgetParentData parentData = child.parentData! as _WidgetParentData;
-
-      // Transform the hit position relative to the child's position
-      final childPosition = ssHitPosition - _ssPositions[idx];
-
-      if (child.hitTest(BoxHitTestResult.wrap(result), position: childPosition)) {
+    while (child != null) {
+      // need to get a coordinate in child space
+      final childParentData = child.parentData as _CanvasWidgetParentData;
+      final Offset childSpacePosition =
+          (position - childParentData.offset /* <- distance in screen space */ ) / childParentData.scale;
+      // divide by scale so if screen space is 2x, it's only x in child space
+      if (child.hitTest(result, position: childSpacePosition)) {
         return true;
       }
-
-      child = parentData.previousSibling;
+      child = childParentData.previousSibling;
     }
-
-    // If no child was hit, the canvas itself handles the hit
-    result.add(BoxHitTestEntry(this, ssHitPosition));
-    return true;
+    return false;
   }
 }

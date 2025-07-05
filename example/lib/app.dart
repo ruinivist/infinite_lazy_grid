@@ -10,7 +10,7 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
-  final CanvasController controller = CanvasController(debug: true);
+  final CanvasController controller = CanvasController(debug: true, initialScale: 1);
 
   @override
   void initState() {
@@ -24,6 +24,24 @@ class _AppState extends State<App> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 8,
+        children: [
+          FloatingActionButton(
+            onPressed: () {
+              controller.updateScalebyDelta(0.1);
+            },
+            child: const Icon(Icons.zoom_in),
+          ),
+          FloatingActionButton(
+            onPressed: () {
+              controller.updateScalebyDelta(-0.1);
+            },
+            child: const Icon(Icons.zoom_out),
+          ),
+        ],
+      ),
       body: CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
     );
   }
