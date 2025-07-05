@@ -144,7 +144,6 @@ class CanvasController with ChangeNotifier {
     if (!_init) return [];
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
-    print("building ${idsToBuild.length} widgets at ${_gsCenter.toPoint()} with extent ${_buildExtent.toPoint()}");
 
     return idsToBuild.map((id) {
       final item = _children[id]!;
