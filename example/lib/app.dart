@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:infinite_lazy_2d_grid/infinite_lazy_2d_grid.dart';
 
+import 'widgets/fps.dart';
+
 class App extends StatefulWidget {
   const App({super.key});
 
@@ -14,10 +16,12 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-
-    controller.addChild(const Offset(100, 100), () => const InfoContainer(color: Colors.red));
-    controller.addChild(const Offset(200, 200), () => const InfoContainer(color: Colors.green));
-    controller.addChild(const Offset(300, 300), () => const InfoContainer(color: Colors.blue));
+    for (int i = 0; i < 10000; i++) {
+      controller.addChild(
+        Offset((i % 80) * 100.0, (i ~/ 80) * 100.0),
+        () => InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
+      );
+    }
   }
 
   @override
@@ -41,7 +45,12 @@ class _AppState extends State<App> {
           ),
         ],
       ),
-      body: CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+      body: Stack(
+        children: [
+          CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+          Positioned(bottom: 16, left: 16, child: Fps()),
+        ],
+      ),
     );
   }
 }
@@ -54,7 +63,7 @@ class InfoContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        print("tapped");
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
       },
       child: Container(color: color, width: 50, height: 50),
     );
