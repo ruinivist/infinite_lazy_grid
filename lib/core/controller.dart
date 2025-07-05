@@ -12,11 +12,18 @@ typedef WidgetBuilder = Widget Function();
 // ignore: non_constant_identifier_names
 final _ChildNotFoundException = Exception('Child with the given ID does not exist');
 
-class _CanvasItem {
+class _ChildInfo {
   Offset gsPosition;
   final WidgetBuilder builder;
 
-  _CanvasItem({required this.gsPosition, required this.builder});
+  _ChildInfo({required this.gsPosition, required this.builder});
+}
+
+class ChildInfo {
+  Offset gsPosition;
+  Offset ssPosition;
+  Widget child;
+  ChildInfo({required this.gsPosition, required this.ssPosition, required this.child});
 }
 
 // ------------------------------ Controller ------------------------------
@@ -25,20 +32,30 @@ class _CanvasItem {
 class CanvasController with ChangeNotifier {
   int _nextId = 0; // surely we won't run out of IDs, Clueless
   Offset _gsTopLeftOffset = Offset.zero;
-  final Map<int, _CanvasItem> _children = {}; // int for IDs
+  double _baseScale, _scale;
+  late Size _canvasSize;
+  final Map<int, _ChildInfo> _children = {}; // int for IDs
   bool debug;
 
-  CanvasController({this.debug = false});
+  CanvasController({this.debug = false, double initialScale = 1})
+    : _scale = initialScale,
+      _baseScale = initialScale,
+      assert(initialScale > 0, 'Initial scale must be greater than 0');
 
   // -------------------- getters --------------------
   Offset get offset => _gsTopLeftOffset;
-
+  double get scale => _scale;
+  Size get canvasSize => _canvasSize;
   // -------------------- public functions --------------------
+
+  void onCanvasSizeChange(Size size) {
+    _canvasSize = size;
+  }
 
   // -------- child manip --------
 
   int addChild(Offset position, WidgetBuilder builder) {
-    _children[_nextId] = _CanvasItem(gsPosition: position, builder: builder);
+    _children[_nextId] = _ChildInfo(gsPosition: position, builder: builder);
     return _nextId++;
   }
 
@@ -63,26 +80,47 @@ class CanvasController with ChangeNotifier {
     }
   }
 
+  void onScaleStart(ScaleStartDetails details) {
+    _baseScale = _scale;
+  }
+
   // -------- gesture handling --------
-  void handleGesture(ScaleUpdateDetails details) {
-    // handle gestures like pinch to zoom, pan, etc.
-
+  void onScaleUpdate(ScaleUpdateDetails details) {
+    // uses usual display conventions and final vector postion - initial vector position
     // convention is that if I drag from right to left, dx is negative
-    // for top to bottom, dy is postive ( so usual display conventions and final vector postion - initial vector position )
-    final delta = details.focalPointDelta;
+    // for top to bottom, dy is postive
 
-    _gsTopLeftOffset -= delta;
+    // scale + offset is => scale then offset
+
+    if (details.scale != 1) {
+      final newScale = _baseScale * details.scale;
+      _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, details.localFocalPoint, _scale, newScale);
+      _scale = newScale;
+    }
+
+    if (details.focalPointDelta != Offset.zero) {
+      // if ss distnace is x, and zoom is 2x, gs only moves by x/2
+      _gsTopLeftOffset -= details.focalPointDelta / _scale;
+    }
 
     notifyListeners();
   }
 
-  List<(Offset, Widget)> widgetsWithScreenPositions() {
+  void updateScalebyDelta(double delta) {
+    final focalPoint = Offset(canvasSize.width / 2, canvasSize.height / 2);
+    final newScale = _scale + delta;
+    _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, focalPoint, _scale, newScale);
+    _scale = newScale;
+    notifyListeners();
+  }
+
+  List<ChildInfo> widgetsWithScreenPositions() {
     return _children.entries.map((entry) {
       final item = entry.value;
-      final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset);
+      final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.builder();
       if (debug) child = _Debug(id: entry.key, gs: item.gsPosition, ss: ssPosition, child: child);
-      return (ssPosition, child);
+      return ChildInfo(gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
     }).toList();
   }
 }
