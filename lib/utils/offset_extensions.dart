@@ -8,8 +8,27 @@ extension OffsetCartesionOps on Offset {
     return dx * dx + dy * dy;
   }
 
+  Offset operator +(Offset other) {
+    return Offset(dx + other.dx, dy + other.dy);
+  }
+
   Offset operator -(Offset other) {
     return Offset(dx - other.dx, dy - other.dy);
+  }
+
+  Offset operator *(double scalar) {
+    return Offset(dx * scalar, dy * scalar);
+  }
+
+  Offset makeAtleast(double value) {
+    return Offset(dx < value ? value : dx, dy < value ? value : dy);
+  }
+
+  Offset operator /(double scalar) {
+    if (scalar == 0) {
+      throw ArgumentError('Division by zero is not allowed.');
+    }
+    return Offset(dx / scalar, dy / scalar);
   }
 
   Point toPoint() {
