@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:infinite_lazy_2d_grid/core/controller.dart';
 import 'package:infinite_lazy_2d_grid/infinite_lazy_2d_grid.dart';
 
 class App extends StatefulWidget {

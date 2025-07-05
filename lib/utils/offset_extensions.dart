@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui' show Offset;
 
 extension OffsetCartesionOps on Offset {
@@ -9,6 +10,10 @@ extension OffsetCartesionOps on Offset {
 
   Offset operator -(Offset other) {
     return Offset(dx - other.dx, dy - other.dy);
+  }
+
+  Point toPoint() {
+    return Point(dx, dy);
   }
 
   String coord() {

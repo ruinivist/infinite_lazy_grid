@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:infinite_lazy_2d_grid/core/controller.dart';
+import 'package:infinite_lazy_2d_grid/core/controller/controller.dart';
 import 'package:infinite_lazy_2d_grid/utils/offset_extensions.dart';
 import 'package:infinite_lazy_2d_grid/utils/styles.dart';
 
@@ -15,45 +15,42 @@ class CanvasView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: canvasBackground.bgColor,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onScaleUpdate: controller.onScaleUpdate,
-        onScaleStart: controller.onScaleStart,
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (_, _) {
-            final childrenWithPositions = controller.widgetsWithScreenPositions();
-            final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
-            final children = childrenWithPositions.map((e) => e.child).toList();
-            final canvas = _CanvasRenderObject(
-              canvasBackground: canvasBackground,
-              ssPositions: ssPositions,
-              scale: controller.scale,
-              onCanvasSizeChange: controller.onCanvasSizeChange,
-              children: children,
-            );
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onScaleUpdate: controller.onScaleUpdate,
+      onScaleStart: controller.onScaleStart,
+      child: ListenableBuilder(
+        listenable: controller,
+        builder: (_, _) {
+          final childrenWithPositions = controller.widgetsWithScreenPositions();
+          final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
+          final children = childrenWithPositions.map((e) => e.child).toList();
+          final canvas = _CanvasRenderObject(
+            canvasBackground: canvasBackground,
+            ssPositions: ssPositions,
+            scale: controller.scale,
+            onCanvasSizeChange: controller.onCanvasSizeChange,
+            children: children,
+          );
 
-            if (controller.debug) {
-              return Stack(
-                children: [
-                  canvas,
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    child: Text(
-                      'Offset: ${controller.offset.coord()}\nScale: ${controller.scale.toStringAsFixed(1)}',
-                      style: monospaceStyle,
-                    ),
+          if (controller.debug) {
+            return Stack(
+              children: [
+                canvas,
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Text(
+                    'Offset: ${controller.offset.coord()}\nScale: ${controller.scale.toStringAsFixed(1)}',
+                    style: monospaceStyle,
                   ),
-                ],
-              );
-            } else {
-              return canvas;
-            }
-          },
-        ),
+                ),
+              ],
+            );
+          } else {
+            return canvas;
+          }
+        },
       ),
     );
   }
@@ -122,7 +119,9 @@ class _CanvasRenderBox extends RenderBox
   }
 
   set ssPositions(List<Offset> ssPositions) {
-    assert(ssPositions.length == childCount);
+    // at this point childCount may not be equal to ssPositions.length
+    // but since we are only marking for layout this is fine
+    // at the actual performLayout this will be asserted
     if (_ssPositions != ssPositions) {
       _ssPositions = ssPositions;
       markNeedsLayout();
