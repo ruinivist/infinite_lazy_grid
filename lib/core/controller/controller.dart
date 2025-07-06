@@ -1,6 +1,10 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
-import 'package:infinite_lazy_2d_grid/core/spatial_hashing.dart';
-import 'package:infinite_lazy_2d_grid/utils/offset_extensions.dart';
+import 'package:infinite_lazy_2d_grid/utils/measure_size.dart';
+import '../spatial_hashing.dart';
+import '../../utils/offset_extensions.dart';
+import '../../utils/size_extensions.dart';
 import '../../utils/conversions.dart';
 import '../../utils/styles.dart';
 
@@ -11,29 +15,26 @@ part 'types.dart';
 class CanvasController with ChangeNotifier {
   int _nextId = 0; // surely we won't run out of IDs, Clueless
   Offset _gsTopLeftOffset = Offset.zero;
-  double _baseScale, _scale;
+  Offset? _lastProcessedOffset;
+  double _baseScale = 1, _scale = 1;
+  double? _lastProcessedScale;
   late Size _canvasSize;
-  final Map<int, _ChildInfo> _children = {}; // int for IDs
+  final HashMap<int, _ChildInfo> _children = HashMap<int, _ChildInfo>(); // int for IDs
   final Offset? _buildCacheExtent;
   late Offset _buildExtent;
   final Size _hashCellSize;
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
+  List<ChildInfo> _renderedChildren = [];
 
   bool debug;
 
-  CanvasController({
-    double initialScale = 1,
-    this.debug = false,
-    Offset? buildCacheExtent,
-    Size hashCellSize = const Size(100, 100),
-  }) : _scale = initialScale,
-       _baseScale = initialScale,
-       _hashCellSize = hashCellSize,
-       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null,
-       // only top left is considered to if a widget has long width, it'll not be rendered
-       // unless the cache extent is sufficient
-       assert(initialScale > 0, 'Initial scale must be greater than 0') {
+  CanvasController({this.debug = false, Offset? buildCacheExtent, Size hashCellSize = const Size(100, 100)})
+    : _hashCellSize = hashCellSize,
+      _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
+  // only top left is considered so if a widget has long width, it'll not be rendered
+  // unless the cache extent is sufficient
+  {
     _spatialHash = SpatialHashing<int>(cellSize: _hashCellSize);
   }
 
@@ -43,6 +44,7 @@ class CanvasController with ChangeNotifier {
   Size get canvasSize => _canvasSize;
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
+  bool get _cleanRenderState => _init && _lastProcessedOffset == _gsTopLeftOffset && _lastProcessedScale == _scale;
 
   // ==================== Public Functions ====================
 
@@ -59,6 +61,10 @@ class CanvasController with ChangeNotifier {
       _init = true;
       Future.microtask(notifyListeners);
     }
+  }
+
+  void onChildSizeChange(int id, Size size) {
+    _children[id]!.lastRenderedSize = size;
   }
 
   // ==================== Child Management ====================
@@ -140,17 +146,24 @@ class CanvasController with ChangeNotifier {
   // ==================== Positioning Logic ====================
 
   /// Currently rendered widgets with their position info
-  List<ChildInfo> widgetsWithScreenPositions() {
+  List<ChildInfo> widgetsWithScreenPositions(BuildContext context, {bool forceRebuild = false}) {
     if (!_init) return [];
+
+    if (_cleanRenderState && !forceRebuild) {
+      return _renderedChildren;
+    }
+
+    _lastProcessedOffset = _gsTopLeftOffset;
+    _lastProcessedScale = _scale;
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 
-    return idsToBuild.map((id) {
+    return _renderedChildren = idsToBuild.map((id) {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
-      var child = item.builder();
+      var child = item.builder(context);
       if (debug) child = _Debug(id: id, gs: item.gsPosition, ss: ssPosition, child: child);
-      return ChildInfo(gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
+      return ChildInfo(id: id, gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
     }).toList();
   }
 
@@ -158,5 +171,69 @@ class CanvasController with ChangeNotifier {
     Offset halfExtent = Offset((extent.dx / (2 * _scale)).ceilToDouble(), (extent.dy / (2 * _scale)).ceilToDouble());
     final items = _spatialHash.getPointsAround(center.toPoint(), halfExtent);
     return items.map((item) => item.data).toList(); // data is the child id here
+  }
+
+  // ==================== Centering & Focus Functions ====================
+
+  /// Center the canvas so that the given screen-space offset is at the center of the viewport.
+  void centerOnScreenOffset(Offset ssOffset) {
+    centerOnGridOffset(ssToGs(ssOffset, _gsTopLeftOffset, _scale));
+  }
+
+  /// Center the canvas so that the given grid-space offset is at the center of the viewport.
+  void centerOnGridOffset(Offset gsOffset) {
+    // if 2x scale you need to adjust lesser
+    _gsTopLeftOffset = gsOffset + (canvasSize * (2 * scale)).toOffset();
+    notifyListeners();
+  }
+
+  /// Focus the viewport on a child by its ID, with a margin in screen-space.
+  /// If it's already rendered, size will be picked up from the child widget. If not
+  /// an offstage rendering will be used ( double render )
+  /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
+  void focusOnChild(
+    BuildContext context,
+    int id, {
+    ScalingMode scalingMode = ScalingMode.keepScale,
+    double preferredHorizontalMargin = 16,
+    Size? childSize,
+    forceRedraw = false,
+  }) {
+    if (!_children.containsKey(id)) {
+      throw _ChildNotFoundException;
+    }
+
+    final childInfo = _children[id]!;
+
+    // try to figure out the size, take from render cache if available
+    // else do an offstage render
+    childSize ??= childInfo.lastRenderedSize != null && !forceRedraw
+        ? childInfo.lastRenderedSize
+        : measureWidgetSize(context, childInfo.builder);
+
+    /*
+    margin is symmatric on ltrb so
+    2mx + cx = screenWidth
+    2my + cy = screenHeight
+    where c is child size in screen space and m is margin
+    */
+
+    switch (scalingMode) {
+      case ScalingMode.keepScale:
+        // do nothing
+        break;
+      case ScalingMode.resetScale:
+        _scale = 1;
+      case ScalingMode.fitInViewport:
+        // the scale needs to be determined in this case
+        // and hence a margin is needed to constrain on x, to get the scale, we then center it along y
+        _scale = (canvasSize.width - 2 * preferredHorizontalMargin) / childSize!.width;
+        break;
+    }
+
+    final marginOffset = ((canvasSize.toOffset() - (childSize! * scale).toOffset()) / (2 * scale)).makeAtleast(0);
+    _gsTopLeftOffset = childInfo.gsPosition - marginOffset;
+
+    notifyListeners();
   }
 }

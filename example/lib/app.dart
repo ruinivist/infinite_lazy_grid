@@ -11,15 +11,21 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
-  final CanvasController controller = CanvasController(debug: true, initialScale: 1);
+  final CanvasController controller = CanvasController(debug: true);
 
   @override
   void initState() {
     super.initState();
-    for (int i = 0; i < 10000; i++) {
+    for (int i = 0; i < 10; i++) {
       controller.addChild(
         Offset((i % 80) * 100.0, (i ~/ 80) * 100.0),
-        () => InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
+        (_) => GestureDetector(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
+            controller.focusOnChild(context, i);
+          },
+          child: InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
+        ),
       );
     }
   }
@@ -61,11 +67,6 @@ class InfoContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
-      },
-      child: Container(color: color, width: 50, height: 50),
-    );
+    return Container(color: color, width: 50, height: 50);
   }
 }

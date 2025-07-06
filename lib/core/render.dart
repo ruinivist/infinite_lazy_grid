@@ -22,14 +22,17 @@ class CanvasView extends StatelessWidget {
       child: ListenableBuilder(
         listenable: controller,
         builder: (_, _) {
-          final childrenWithPositions = controller.widgetsWithScreenPositions();
+          final childrenWithPositions = controller.widgetsWithScreenPositions(context);
           final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
+          final childrenIds = childrenWithPositions.map((e) => e.id).toList();
           final children = childrenWithPositions.map((e) => e.child).toList();
           final canvas = _CanvasRenderObject(
+            childrenIds: childrenIds,
             canvasBackground: canvasBackground,
             ssPositions: ssPositions,
             scale: controller.scale,
             onCanvasSizeChange: controller.onCanvasSizeChange,
+            onChildSizeChange: controller.onChildSizeChange,
             children: children,
           );
 
@@ -59,16 +62,20 @@ class CanvasView extends StatelessWidget {
 /// A combined widget for all the render object of the children + background.
 /// Everything is in screen space here
 class _CanvasRenderObject extends MultiChildRenderObjectWidget {
+  final List<int> childrenIds;
   final List<Offset> ssPositions;
   final double scale;
   final CanvasBackground canvasBackground;
   final Function onCanvasSizeChange;
+  final Function onChildSizeChange;
 
   const _CanvasRenderObject({
+    required this.childrenIds,
     required this.ssPositions,
     required this.scale,
     required this.canvasBackground,
     required this.onCanvasSizeChange,
+    required this.onChildSizeChange,
     required super.children, // children go to the MultiChildRenderObjectWidget
   }) : assert(ssPositions.length == children.length, 'Children and positions must have the same length'),
        assert(scale != 0);
@@ -76,16 +83,19 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
   @override
   RenderObject createRenderObject(BuildContext context) {
     return _CanvasRenderBox(
+      childrenIds: childrenIds,
       ssPositions: ssPositions,
       scale: scale,
       canvasBackground: canvasBackground,
       onCanvasSizeChange: onCanvasSizeChange,
+      onChildSizeChange: onChildSizeChange,
     );
   }
 
   @override
   void updateRenderObject(BuildContext context, _CanvasRenderBox renderObject) {
     renderObject
+      ..childrenIds = childrenIds
       ..ssPositions = ssPositions
       ..canvasBackground = canvasBackground
       ..scale = scale;
@@ -94,6 +104,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
 
 class _CanvasWidgetParentData extends ContainerBoxParentData<RenderBox> {
   // there is already an "offset" defined in BoxParentdata that is exactly what I want
+  late int id;
   late double scale; // scale is same for all rn but this makes it trivial to expand to children with diff scales
 }
 
@@ -102,14 +113,24 @@ class _CanvasRenderBox extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _CanvasWidgetParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _CanvasWidgetParentData> {
   CanvasBackground _canvasBackground;
+  List<int> _childrenIds;
   List<Offset> _ssPositions;
   double _scale;
   Function onCanvasSizeChange;
+  Function onChildSizeChange;
 
-  _CanvasRenderBox({required ssPositions, required scale, required canvasBackground, required this.onCanvasSizeChange})
-    : _ssPositions = ssPositions,
-      _scale = scale,
-      _canvasBackground = canvasBackground;
+  _CanvasRenderBox({
+    required childrenIds,
+    required ssPositions,
+    required scale,
+    required canvasBackground,
+    required this.onCanvasSizeChange,
+    required this.onChildSizeChange,
+  }) : assert(childrenIds.length == ssPositions.length),
+       _childrenIds = childrenIds,
+       _ssPositions = ssPositions,
+       _scale = scale,
+       _canvasBackground = canvasBackground;
 
   @override
   void setupParentData(RenderBox child) {
@@ -125,6 +146,12 @@ class _CanvasRenderBox extends RenderBox
     if (_ssPositions != ssPositions) {
       _ssPositions = ssPositions;
       markNeedsLayout();
+    }
+  }
+
+  set childrenIds(List<int> childrenIds) {
+    if (_childrenIds != childrenIds) {
+      _childrenIds = childrenIds;
     }
   }
 
@@ -153,11 +180,16 @@ class _CanvasRenderBox extends RenderBox
     int index = 0;
     while (child != null) {
       final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
-      childParentData.offset = _ssPositions[index++];
+      childParentData.offset = _ssPositions[index];
+      childParentData.id = _childrenIds[index];
       childParentData.scale = _scale;
+      index++;
       // loosen so like a stack can take it's own size inside parent
-      // like a stack parent is not using size and is always expanded hence the second arg
-      child.layout(constraints.loosen(), parentUsesSize: false);
+      child.layout(constraints.loosen(), parentUsesSize: true);
+
+      // notify the controller about the size of the child
+      onChildSizeChange(childParentData.id, child.size);
+
       child = childParentData.nextSibling;
     }
   }
