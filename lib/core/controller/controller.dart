@@ -1,18 +1,19 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
-import 'package:infinite_lazy_2d_grid/utils/measure_size.dart';
+import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
 import '../../utils/offset_extensions.dart';
 import '../../utils/size_extensions.dart';
 import '../../utils/conversions.dart';
 import '../../utils/styles.dart';
+import '../render.dart';
 
 part 'debug.dart';
 part 'types.dart';
 
-/// Every canvas view needs one and this handles the positioning logic
-class CanvasController with ChangeNotifier {
+/// Controller for [LazyCanvas]
+class LazyCanvasController with ChangeNotifier {
   int _nextId = 0; // surely we won't run out of IDs, Clueless
   Offset _gsTopLeftOffset = Offset.zero;
   Offset? _lastProcessedOffset;
@@ -30,7 +31,7 @@ class CanvasController with ChangeNotifier {
 
   bool debug;
 
-  CanvasController({this.debug = false, Offset? buildCacheExtent, Size hashCellSize = const Size(100, 100)})
+  LazyCanvasController({this.debug = false, Offset? buildCacheExtent, Size hashCellSize = const Size(100, 100)})
     : _hashCellSize = hashCellSize,
       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
   // only top left is considered so if a widget has long width, it'll not be rendered
@@ -64,10 +65,12 @@ class CanvasController with ChangeNotifier {
     }
   }
 
+  /// Called when a child widget's size changes.
   void onChildSizeChange(int id, Size size) {
     _children[id]!.lastRenderedSize = size;
   }
 
+  /// Set the ticker provider for animations.
   void setTickerProvider(TickerProvider ticker) {
     _ticker = ticker;
   }
@@ -139,7 +142,7 @@ class CanvasController with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Increment or decrement the scale by a delta value.
+  /// Increment or decrement the scale by an additive delta value.
   void updateScalebyDelta(double delta) {
     final focalPoint = Offset(canvasSize.width / 2, canvasSize.height / 2);
     final newScale = _scale + delta;
@@ -259,6 +262,7 @@ class CanvasController with ChangeNotifier {
 
   // ==================== Animation ====================
 
+  /// Animate the canvas to a new offset and scale
   Future<void> animateToOffsetAndScale({
     required Offset offset,
     required double scale,

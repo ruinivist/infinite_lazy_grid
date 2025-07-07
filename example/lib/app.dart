@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:infinite_lazy_2d_grid/infinite_lazy_2d_grid.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 import 'widgets/fps.dart';
 
@@ -11,7 +11,7 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
-  final CanvasController controller = CanvasController(debug: true);
+  final LazyCanvasController controller = LazyCanvasController(debug: true);
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class _AppState extends State<App> {
       ),
       body: Stack(
         children: [
-          CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+          LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
           Positioned(bottom: 64, left: 16, child: Fps()),
         ],
       ),

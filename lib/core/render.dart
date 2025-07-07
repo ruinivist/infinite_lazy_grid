@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:infinite_lazy_2d_grid/core/controller/controller.dart';
-import 'package:infinite_lazy_2d_grid/utils/offset_extensions.dart';
-import 'package:infinite_lazy_2d_grid/utils/styles.dart';
+import '../utils/offset_extensions.dart';
 
+import '../utils/styles.dart';
 import 'background.dart';
+import 'controller/controller.dart';
 
 /// An infinite canvas that places all the children at the specified positions.
-class CanvasView extends StatefulWidget {
+/// Needs a [LazyCanvasController] to control the canvas and a [CanvasBackground] to draw the background.
+class LazyCanvas extends StatefulWidget {
   final CanvasBackground canvasBackground;
-  final CanvasController controller;
+  final LazyCanvasController controller;
 
-  const CanvasView({required this.controller, required this.canvasBackground, super.key});
+  const LazyCanvas({required this.controller, required this.canvasBackground, super.key});
 
   @override
-  State<CanvasView> createState() => _CanvasViewState();
+  State<LazyCanvas> createState() => _LazyCanvasState();
 }
 
-class _CanvasViewState extends State<CanvasView> with TickerProviderStateMixin<CanvasView> {
+class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<LazyCanvas> {
   @override
   void initState() {
     super.initState();
