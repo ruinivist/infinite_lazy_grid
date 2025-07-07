@@ -26,6 +26,7 @@ class CanvasController with ChangeNotifier {
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
   List<ChildInfo> _renderedChildren = [];
+  TickerProvider? _ticker;
 
   bool debug;
 
@@ -46,7 +47,7 @@ class CanvasController with ChangeNotifier {
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
   bool get _cleanRenderState => _init && _lastProcessedOffset == _gsTopLeftOffset && _lastProcessedScale == _scale;
 
-  // ==================== Public Functions ====================
+  // ==================== Callback Functions ====================
 
   /// Update the canvas size when the widget size changes.
   void onCanvasSizeChange(Size size) {
@@ -65,6 +66,10 @@ class CanvasController with ChangeNotifier {
 
   void onChildSizeChange(int id, Size size) {
     _children[id]!.lastRenderedSize = size;
+  }
+
+  void setTickerProvider(TickerProvider ticker) {
+    _ticker = ticker;
   }
 
   // ==================== Child Management ====================
@@ -176,15 +181,20 @@ class CanvasController with ChangeNotifier {
   // ==================== Centering & Focus Functions ====================
 
   /// Center the canvas so that the given screen-space offset is at the center of the viewport.
-  void centerOnScreenOffset(Offset ssOffset) {
-    centerOnGridOffset(ssToGs(ssOffset, _gsTopLeftOffset, _scale));
+  void centerOnScreenOffset(Offset ssOffset, {bool animate = true}) {
+    centerOnGridOffset(ssToGs(ssOffset, _gsTopLeftOffset, _scale), animate: animate);
   }
 
   /// Center the canvas so that the given grid-space offset is at the center of the viewport.
-  void centerOnGridOffset(Offset gsOffset) {
+  void centerOnGridOffset(Offset gsOffset, {bool animate = true}) {
     // if 2x scale you need to adjust lesser
-    _gsTopLeftOffset = gsOffset + (canvasSize * (2 * scale)).toOffset();
-    notifyListeners();
+    final newGsTopLeft = gsOffset + (canvasSize * (2 * scale)).toOffset();
+    if (animate) {
+      animateToOffsetAndScale(offset: newGsTopLeft, scale: _scale);
+    } else {
+      _gsTopLeftOffset = newGsTopLeft;
+      notifyListeners();
+    }
   }
 
   /// Focus the viewport on a child by its ID, with a margin in screen-space.
@@ -195,6 +205,7 @@ class CanvasController with ChangeNotifier {
     BuildContext context,
     int id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
+    bool animate = true,
     double preferredHorizontalMargin = 16,
     Size? childSize,
     forceRedraw = false,
@@ -218,22 +229,56 @@ class CanvasController with ChangeNotifier {
     where c is child size in screen space and m is margin
     */
 
+    double newScale = _scale;
+    Offset newGsTopLeft = _gsTopLeftOffset;
+
     switch (scalingMode) {
       case ScalingMode.keepScale:
         // do nothing
         break;
       case ScalingMode.resetScale:
-        _scale = 1;
+        newScale = 1;
       case ScalingMode.fitInViewport:
         // the scale needs to be determined in this case
         // and hence a margin is needed to constrain on x, to get the scale, we then center it along y
-        _scale = (canvasSize.width - 2 * preferredHorizontalMargin) / childSize!.width;
+        newScale = (canvasSize.width - 2 * preferredHorizontalMargin) / childSize!.width;
         break;
     }
 
     final marginOffset = ((canvasSize.toOffset() - (childSize! * scale).toOffset()) / (2 * scale)).makeAtleast(0);
-    _gsTopLeftOffset = childInfo.gsPosition - marginOffset;
+    newGsTopLeft = childInfo.gsPosition - marginOffset;
 
-    notifyListeners();
+    if (animate) {
+      animateToOffsetAndScale(offset: newGsTopLeft, scale: newScale); // anim will notifyListeners
+    } else {
+      _gsTopLeftOffset = newGsTopLeft;
+      _scale = newScale;
+      notifyListeners();
+    }
+  }
+
+  // ==================== Animation ====================
+
+  Future<void> animateToOffsetAndScale({
+    required Offset offset,
+    required double scale,
+    Duration duration = const Duration(milliseconds: 300),
+    Curve curve = Curves.easeInOut,
+  }) async {
+    final anim = AnimationController(vsync: _ticker!, duration: duration);
+    final offsetTween = Tween<Offset>(begin: _gsTopLeftOffset, end: offset);
+    final scaleTween = Tween<double>(begin: _scale, end: scale);
+
+    final offsetAnimation = offsetTween.animate(CurvedAnimation(parent: anim, curve: curve));
+    final scaleAnimation = scaleTween.animate(CurvedAnimation(parent: anim, curve: curve));
+
+    anim.addListener(() {
+      _gsTopLeftOffset = offsetAnimation.value;
+      _scale = scaleAnimation.value;
+      notifyListeners();
+    });
+
+    await anim.forward();
+    anim.dispose();
   }
 }

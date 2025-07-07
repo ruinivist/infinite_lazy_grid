@@ -7,36 +7,53 @@ import 'package:infinite_lazy_2d_grid/utils/styles.dart';
 import 'background.dart';
 
 /// An infinite canvas that places all the children at the specified positions.
-class CanvasView extends StatelessWidget {
+class CanvasView extends StatefulWidget {
   final CanvasBackground canvasBackground;
   final CanvasController controller;
 
   const CanvasView({required this.controller, required this.canvasBackground, super.key});
 
   @override
+  State<CanvasView> createState() => _CanvasViewState();
+}
+
+class _CanvasViewState extends State<CanvasView> with TickerProviderStateMixin<CanvasView> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.setTickerProvider(this);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.dispose(); // for the change notifier
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onScaleUpdate: controller.onScaleUpdate,
-      onScaleStart: controller.onScaleStart,
+      onScaleUpdate: widget.controller.onScaleUpdate,
+      onScaleStart: widget.controller.onScaleStart,
       child: ListenableBuilder(
-        listenable: controller,
+        listenable: widget.controller,
         builder: (_, _) {
-          final childrenWithPositions = controller.widgetsWithScreenPositions(context);
+          final childrenWithPositions = widget.controller.widgetsWithScreenPositions(context);
           final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
           final childrenIds = childrenWithPositions.map((e) => e.id).toList();
           final children = childrenWithPositions.map((e) => e.child).toList();
           final canvas = _CanvasRenderObject(
             childrenIds: childrenIds,
-            canvasBackground: canvasBackground,
+            canvasBackground: widget.canvasBackground,
             ssPositions: ssPositions,
-            scale: controller.scale,
-            onCanvasSizeChange: controller.onCanvasSizeChange,
-            onChildSizeChange: controller.onChildSizeChange,
+            scale: widget.controller.scale,
+            onCanvasSizeChange: widget.controller.onCanvasSizeChange,
+            onChildSizeChange: widget.controller.onChildSizeChange,
             children: children,
           );
 
-          if (controller.debug) {
+          if (widget.controller.debug) {
             return Stack(
               children: [
                 canvas,
@@ -44,7 +61,7 @@ class CanvasView extends StatelessWidget {
                   top: 16,
                   left: 16,
                   child: Text(
-                    'Offset: ${controller.offset.coord()}\nScale: ${controller.scale.toStringAsFixed(1)}',
+                    'Offset: ${widget.controller.offset.coord()}\nScale: ${widget.controller.scale.toStringAsFixed(1)}',
                     style: monospaceStyle,
                   ),
                 ),
