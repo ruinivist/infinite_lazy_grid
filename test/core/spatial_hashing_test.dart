@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:infinite_lazy_2d_grid/core/spatial_hashing.dart';
+import 'package:infinite_lazy_grid/core/spatial_hashing.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 

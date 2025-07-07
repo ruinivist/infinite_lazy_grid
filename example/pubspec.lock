@@ -75,7 +75,7 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  infinite_lazy_2d_grid:
+  infinite_lazy_grid:
     dependency: "direct main"
     description:
       path: ".."

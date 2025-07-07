@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import './render.dart';
 
+/// Abstract definition for a [LazyCanvas] background.
 abstract class CanvasBackground {
   /// the fill color of background
   final Color bgColor;

@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:infinite_lazy_2d_grid/core/render.dart';
-import 'package:infinite_lazy_2d_grid/core/controller/controller.dart';
-import 'package:infinite_lazy_2d_grid/core/background.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 class TestChild extends StatelessWidget {
   final int index;
@@ -15,14 +13,14 @@ class TestChild extends StatelessWidget {
 
 void main() {
   testWidgets('CanvasView renders only visible children and reduces count on zoom out', (WidgetTester tester) async {
-    final controller = CanvasController(debug: true);
+    final controller = LazyCanvasController(debug: true);
     for (int i = 0; i < 10000; i++) {
       controller.addChild(Offset((i % 80) * 100.0, (i ~/ 80) * 100.0), (_) => TestChild(index: i));
     }
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+          body: LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
         ),
       ),
     );
@@ -46,18 +44,18 @@ void main() {
   });
 
   testWidgets('CanvasView scales as expected', (WidgetTester tester) async {
-    final controller = CanvasController(debug: true);
+    final controller = LazyCanvasController(debug: true);
     controller.addChild(const Offset(0, 0), (_) => TestChild(index: 0));
     controller.addChild(const Offset(100, 100), (_) => TestChild(index: 1));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+          body: LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    final context = tester.element(find.byType(CanvasView));
+    final context = tester.element(find.byType(LazyCanvas));
 
     // Initial size check
     final finder = find.byType(TestChild);

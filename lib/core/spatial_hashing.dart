@@ -12,6 +12,8 @@ class PointData<T> {
   PointData(this.point, this.data);
 }
 
+/// Data structure for spatial hashing to get widgets to be built quickly
+/// based on their position in a 2D grid.
 class SpatialHashing<T> {
   final Size cellSize;
   final HashMap<Point, T> _pointData = HashMap<Point, T>();
