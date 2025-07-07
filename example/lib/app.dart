@@ -54,7 +54,7 @@ class _AppState extends State<App> {
       body: Stack(
         children: [
           CanvasView(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
-          Positioned(bottom: 16, left: 16, child: Fps()),
+          Positioned(bottom: 64, left: 16, child: Fps()),
         ],
       ),
     );
