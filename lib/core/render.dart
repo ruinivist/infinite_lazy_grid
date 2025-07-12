@@ -216,7 +216,7 @@ class _CanvasRenderBox extends RenderBox
   void paint(PaintingContext context, Offset canvasStartOffset) {
     assert(childCount == _ssPositions.length);
     // use the canvas background painter, pass it the canvas and that should handle drawing the background
-    _canvasBackground.paint(context.canvas, size, _scale);
+    _canvasBackground.paint(context.canvas, canvasStartOffset, _scale, size);
 
     // though using ssPositionns here directly worked for me but docs using the parentData
     // to get this info is the convention as child can be reordered ( though this will always
