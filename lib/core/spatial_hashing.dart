@@ -73,4 +73,9 @@ class SpatialHashing<T> {
 
     return results;
   }
+
+  void clear() {
+    _pointData.clear();
+    _cellMap.clear();
+  }
 }
