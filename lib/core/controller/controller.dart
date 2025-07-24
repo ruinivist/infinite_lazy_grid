@@ -26,7 +26,7 @@ class LazyCanvasController with ChangeNotifier {
   final Size _hashCellSize;
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
-  List<ChildInfo> _renderedChildren = [];
+  List<ChildInfo> _renderedChildrenCache = [];
   TickerProvider? _ticker;
 
   bool debug;
@@ -81,6 +81,7 @@ class LazyCanvasController with ChangeNotifier {
   int addChild(Offset position, WidgetBuilder builder) {
     _children[_nextId] = _ChildInfo(gsPosition: position, builder: builder);
     _spatialHash.add(position.toPoint(), _nextId); // add to spatial hash
+    notifyListeners();
     return _nextId++;
   }
 
@@ -91,12 +92,25 @@ class LazyCanvasController with ChangeNotifier {
     }
     _spatialHash.remove(_children[id]!.gsPosition.toPoint());
     _children.remove(id);
+    notifyListeners();
+  }
+
+  /// Remove all children. Does not change where you are on the canvas.
+  void clear() {
+    _children.clear();
+    _spatialHash.clear();
+    _nextId = 0;
+    _renderedChildrenCache.clear();
+    _lastProcessedOffset = null;
+    _lastProcessedScale = null;
+    notifyListeners();
   }
 
   /// Update the position of a child by its ID.
   int updatePosition(int id, Offset newPosition) {
     if (_children.containsKey(id)) {
       _children[id]!.gsPosition = newPosition;
+      notifyListeners();
       return id;
     } else {
       throw _ChildNotFoundException;
@@ -158,7 +172,7 @@ class LazyCanvasController with ChangeNotifier {
     if (!_init) return [];
 
     if (_cleanRenderState && !forceRebuild) {
-      return _renderedChildren;
+      return _renderedChildrenCache;
     }
 
     _lastProcessedOffset = _gsTopLeftOffset;
@@ -166,7 +180,7 @@ class LazyCanvasController with ChangeNotifier {
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 
-    return _renderedChildren = idsToBuild.map((id) {
+    return _renderedChildrenCache = idsToBuild.map((id) {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.builder(context);
