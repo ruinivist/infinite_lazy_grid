@@ -3,14 +3,14 @@ import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 import 'widgets/fps.dart';
 
-class App extends StatefulWidget {
-  const App({super.key});
+class SimpleExample extends StatefulWidget {
+  const SimpleExample({super.key});
 
   @override
-  State<App> createState() => _AppState();
+  State<SimpleExample> createState() => _SimpleExampleState();
 }
 
-class _AppState extends State<App> {
+class _SimpleExampleState extends State<SimpleExample> {
   final LazyCanvasController controller = LazyCanvasController(debug: true);
 
   @override
@@ -33,17 +33,20 @@ class _AppState extends State<App> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Simple Example')),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         spacing: 8,
         children: [
           FloatingActionButton(
+            heroTag: 'app_zoom_in',
             onPressed: () {
               controller.updateScalebyDelta(0.1);
             },
             child: const Icon(Icons.zoom_in),
           ),
           FloatingActionButton(
+            heroTag: 'app_zoom_out',
             onPressed: () {
               controller.updateScalebyDelta(-0.1);
             },

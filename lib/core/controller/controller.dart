@@ -24,6 +24,7 @@ class LazyCanvasController with ChangeNotifier {
   final Offset? _buildCacheExtent;
   late Offset _buildExtent;
   final Size _hashCellSize;
+  bool _adhocRender = false;
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
   List<ChildInfo> _renderedChildrenCache = [];
@@ -46,7 +47,8 @@ class LazyCanvasController with ChangeNotifier {
   Size get canvasSize => _canvasSize;
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
-  bool get _cleanRenderState => _init && _lastProcessedOffset == _gsTopLeftOffset && _lastProcessedScale == _scale;
+  bool get _cleanRenderState =>
+      _init && _lastProcessedOffset == _gsTopLeftOffset && _lastProcessedScale == _scale && !_adhocRender;
 
   // ==================== Callback Functions ====================
 
@@ -124,6 +126,7 @@ class LazyCanvasController with ChangeNotifier {
       // Create a new _ChildInfo with the new widget
       _children[id] = _ChildInfo(gsPosition: child.gsPosition, widget: newWidget)
         ..lastRenderedSize = child.lastRenderedSize;
+      _adhocRender = true; // so that even if the position is same, it will be re-rendered
       notifyListeners();
     } else {
       throw _ChildNotFoundException;
@@ -190,6 +193,7 @@ class LazyCanvasController with ChangeNotifier {
 
     _lastProcessedOffset = _gsTopLeftOffset;
     _lastProcessedScale = _scale;
+    _adhocRender = false;
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 

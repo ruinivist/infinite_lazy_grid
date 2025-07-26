@@ -24,14 +24,13 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
   }
 
   void _setupWidgets() {
-    // Approach 1: Using StatefulWidget with GlobalKey to preserve state
-    controller.addChild(const Offset(0, 0), SelfManagedCounterWidget(key: GlobalKey(), label: "Self-Managed"));
+    // Approach 1: Using StatefulWidget with state inside the widget getting lost if unmounted
+    controller.addChild(const Offset(0, 0), SelfManagedCounterWidget(label: "Self-Managed"));
 
-    // Approach 2: Using updateChildWidget, though since before and after it's still just as the same ExternalDataWidget
-    // you need to have the key change as an arg change is separated from the tree
+    // Approach 2: Using updateChildWidget, you need this since the children dep tree is direcly managed by the controller
     controller.addChild(
       const Offset(200, 0),
-      ExternalDataWidget(key: ValueKey('external_$counter'), counter: counter, message: message, color: selectedColor),
+      ExternalDataWidget(counter: counter, message: message, color: selectedColor),
     );
 
     // Approach 3: Using ValueListenableBuilder for reactive updates
@@ -74,7 +73,7 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
     controller.updateChildWidget(
       1, // Widget ID (second widget added)
       ExternalDataWidget(
-        key: ValueKey('external_$counter'), // Force rebuild with unique key
+        // key: ValueKey('external_$counter'), // Force rebuild with unique key
         counter: counter,
         message: message,
         color: selectedColor,
@@ -98,9 +97,9 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Four approaches for dynamic inputs:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Three approaches for dynamic inputs:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('1. Self-managed StatefulWidget with GlobalKey - preserves state when off-screen'),
+                const Text('1. Self-managed StatefulWidget (left), loses state on unmount'),
                 const Text('2. External data + updateChildWidget (center) - manual updates'),
                 const Text('3. ValueListenableBuilder (right) - reactive updates'),
                 const SizedBox(height: 16),

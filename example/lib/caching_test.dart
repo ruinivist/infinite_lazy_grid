@@ -20,7 +20,12 @@ class _CachingTestAppState extends State<CachingTestApp> {
     for (int i = 0; i < 20; i++) {
       controller.addChild(
         Offset((i % 5) * 120.0, (i ~/ 5) * 120.0),
-        BuildCounterWidget(color: Colors.primaries[i % Colors.primaries.length], label: 'Widget $i'),
+        BuildCounterWidget(
+          key: ValueKey<int>(i), // since in the tree it will be just an array at the same height, a count change
+          // along the egdes of screen build all so you need a key to identify individually
+          color: Colors.primaries[i % Colors.primaries.length],
+          label: 'Widget $i',
+        ),
       );
     }
   }
