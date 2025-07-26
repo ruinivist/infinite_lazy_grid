@@ -202,16 +202,16 @@ class LazyCanvasController with ChangeNotifier {
   // ==================== Centering & Focus Functions ====================
 
   /// Center the canvas so that the given screen-space offset is at the center of the viewport.
-  void centerOnScreenOffset(Offset ssOffset, {bool animate = true}) {
+  void centerOnScreenOffset(Offset ssOffset, {Duration? duration, bool animate = true}) {
     centerOnGridOffset(ssToGs(ssOffset, _gsTopLeftOffset, _scale), animate: animate);
   }
 
   /// Center the canvas so that the given grid-space offset is at the center of the viewport.
-  void centerOnGridOffset(Offset gsOffset, {bool animate = true}) {
+  void centerOnGridOffset(Offset gsOffset, {Duration? duration, bool animate = true}) {
     // if 2x scale you need to adjust lesser
     final newGsTopLeft = gsOffset + (canvasSize * (2 * scale)).toOffset();
     if (animate) {
-      animateToOffsetAndScale(offset: newGsTopLeft, scale: _scale);
+      animateToOffsetAndScale(offset: newGsTopLeft, duration: duration, scale: _scale);
     } else {
       _gsTopLeftOffset = newGsTopLeft;
       notifyListeners();
@@ -227,6 +227,7 @@ class LazyCanvasController with ChangeNotifier {
     ScalingMode scalingMode = ScalingMode.keepScale,
     bool animate = true,
     double preferredHorizontalMargin = 16,
+    Duration? duration,
     Size? childSize,
     forceRedraw = false,
   }) {
@@ -269,7 +270,7 @@ class LazyCanvasController with ChangeNotifier {
     newGsTopLeft = childInfo.gsPosition - marginOffset;
 
     if (animate) {
-      animateToOffsetAndScale(offset: newGsTopLeft, scale: newScale); // anim will notifyListeners
+      animateToOffsetAndScale(offset: newGsTopLeft, duration: duration, scale: newScale);
     } else {
       _gsTopLeftOffset = newGsTopLeft;
       _scale = newScale;
@@ -283,7 +284,7 @@ class LazyCanvasController with ChangeNotifier {
   Future<void> animateToOffsetAndScale({
     required Offset offset,
     required double scale,
-    Duration duration = const Duration(milliseconds: 300),
+    Duration? duration = const Duration(milliseconds: 300),
     Curve curve = Curves.easeInOut,
   }) async {
     final anim = AnimationController(vsync: _ticker!, duration: duration);
