@@ -33,6 +33,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
 
   @override
   Widget build(BuildContext context) {
+    widget.controller.setBuildContext(context);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onScaleUpdate: widget.controller.onScaleUpdate,
@@ -40,7 +41,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
       child: ListenableBuilder(
         listenable: widget.controller,
         builder: (_, _) {
-          final childrenWithPositions = widget.controller.widgetsWithScreenPositions(context);
+          final childrenWithPositions = widget.controller.widgetsWithScreenPositions();
           final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
           final childrenIds = childrenWithPositions.map((e) => e.id).toList();
           final children = childrenWithPositions.map((e) => e.child).toList();
