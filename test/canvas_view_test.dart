@@ -55,7 +55,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
     final context = tester.element(find.byType(LazyCanvas));
+    controller.setBuildContext(context);
 
     // Initial size check
     final finder = find.byType(TestChild);
@@ -66,7 +68,7 @@ void main() {
     controller.onScaleUpdate(ScaleUpdateDetails(focalPoint: const Offset(0, 0), scale: 2.0));
     await tester.pumpAndSettle();
     expect(controller.scale, 2.0);
-    final ssPositions = controller.widgetsWithScreenPositions(context).map((e) => e.ssPosition).toList();
+    final ssPositions = controller.widgetsWithScreenPositions().map((e) => e.ssPosition).toList();
     expect(ssPositions, [Offset.zero, const Offset(200, 200)]);
   });
 }

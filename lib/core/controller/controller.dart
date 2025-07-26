@@ -25,6 +25,7 @@ class LazyCanvasController with ChangeNotifier {
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
   TickerProvider? _ticker;
+  late BuildContext _context;
 
   bool debug;
 
@@ -69,6 +70,10 @@ class LazyCanvasController with ChangeNotifier {
   /// Set the ticker provider for animations.
   void setTickerProvider(TickerProvider ticker) {
     _ticker = ticker;
+  }
+
+  void setBuildContext(BuildContext context) {
+    _context = context;
   }
 
   // ==================== Child Management ====================
@@ -174,7 +179,7 @@ class LazyCanvasController with ChangeNotifier {
   // ==================== Positioning Logic ====================
 
   /// Currently rendered widgets with their position info
-  List<ChildInfo> widgetsWithScreenPositions(BuildContext context, {bool forceRebuild = false}) {
+  List<ChildInfo> widgetsWithScreenPositions({bool forceRebuild = false}) {
     if (!_init) return [];
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
@@ -218,7 +223,6 @@ class LazyCanvasController with ChangeNotifier {
   /// an offstage rendering will be used ( double render )
   /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
   void focusOnChild(
-    BuildContext context,
     int id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
     bool animate = true,
@@ -236,7 +240,7 @@ class LazyCanvasController with ChangeNotifier {
     // else do an offstage render
     childSize ??= childInfo.lastRenderedSize != null && !forceRedraw
         ? childInfo.lastRenderedSize
-        : measureWidgetSize(context, (_) => childInfo.widget);
+        : measureWidgetSize(_context, (_) => childInfo.widget);
 
     /*
     margin is symmatric on ltrb so

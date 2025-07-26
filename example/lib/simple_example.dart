@@ -22,7 +22,7 @@ class _SimpleExampleState extends State<SimpleExample> {
         GestureDetector(
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
-            controller.focusOnChild(context, i);
+            controller.focusOnChild(i);
           },
           child: InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
         ),
