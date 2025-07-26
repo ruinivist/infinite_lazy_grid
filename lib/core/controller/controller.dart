@@ -16,18 +16,14 @@ part 'types.dart';
 class LazyCanvasController with ChangeNotifier {
   int _nextId = 0; // surely we won't run out of IDs, Clueless
   Offset _gsTopLeftOffset = Offset.zero;
-  Offset? _lastProcessedOffset;
   double _baseScale = 1, _scale = 1;
-  double? _lastProcessedScale;
   late Size _canvasSize;
   final HashMap<int, _ChildInfo> _children = HashMap<int, _ChildInfo>(); // int for IDs
   final Offset? _buildCacheExtent;
   late Offset _buildExtent;
   final Size _hashCellSize;
-  bool _adhocRender = false;
   bool _init = false;
   late final SpatialHashing<int> _spatialHash;
-  List<ChildInfo> _renderedChildrenCache = [];
   TickerProvider? _ticker;
 
   bool debug;
@@ -47,8 +43,6 @@ class LazyCanvasController with ChangeNotifier {
   Size get canvasSize => _canvasSize;
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
-  bool get _cleanRenderState =>
-      _init && _lastProcessedOffset == _gsTopLeftOffset && _lastProcessedScale == _scale && !_adhocRender;
 
   // ==================== Callback Functions ====================
 
@@ -102,9 +96,6 @@ class LazyCanvasController with ChangeNotifier {
     _children.clear();
     _spatialHash.clear();
     _nextId = 0;
-    _renderedChildrenCache.clear();
-    _lastProcessedOffset = null;
-    _lastProcessedScale = null;
     notifyListeners();
   }
 
@@ -126,7 +117,6 @@ class LazyCanvasController with ChangeNotifier {
       // Create a new _ChildInfo with the new widget
       _children[id] = _ChildInfo(gsPosition: child.gsPosition, widget: newWidget)
         ..lastRenderedSize = child.lastRenderedSize;
-      _adhocRender = true; // so that even if the position is same, it will be re-rendered
       notifyListeners();
     } else {
       throw _ChildNotFoundException;
@@ -187,17 +177,9 @@ class LazyCanvasController with ChangeNotifier {
   List<ChildInfo> widgetsWithScreenPositions(BuildContext context, {bool forceRebuild = false}) {
     if (!_init) return [];
 
-    if (_cleanRenderState && !forceRebuild) {
-      return _renderedChildrenCache;
-    }
-
-    _lastProcessedOffset = _gsTopLeftOffset;
-    _lastProcessedScale = _scale;
-    _adhocRender = false;
-
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 
-    return _renderedChildrenCache = idsToBuild.map((id) {
+    return idsToBuild.map((id) {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.widget;
