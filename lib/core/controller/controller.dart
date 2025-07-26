@@ -30,6 +30,11 @@ class LazyCanvasController with ChangeNotifier {
   bool _firstBuild = true;
   int? _focusChildOnInit; // if set, will focus on this child on first build
   CanvasBackground background;
+  // these are used to cache result of widgetsWithScreenPositions
+  List<ChildInfo> _lastRenderedWidgets = [];
+  Offset? _lastProcessedOffset;
+  double? _lastProcessedScale;
+  bool _markDirty = false; // do any of the non scale or offset changes require a rebuild?
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -54,6 +59,7 @@ class LazyCanvasController with ChangeNotifier {
   Size get canvasSize => _canvasSize;
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
+  bool get _renderCacheDirty => _lastProcessedOffset != _gsTopLeftOffset || _lastProcessedScale != _scale || _markDirty;
 
   // ==================== Callback Functions ====================
 
@@ -68,7 +74,7 @@ class LazyCanvasController with ChangeNotifier {
     // if the first init, re-render as I don't have the canvas size to build widgets
     if (!_init) {
       _init = true;
-      Future.microtask(notifyListeners);
+      Future.microtask(markDirty);
     }
   }
 
@@ -86,6 +92,17 @@ class LazyCanvasController with ChangeNotifier {
     _context = context;
   }
 
+  // ==================== Utils ====================
+
+  void markDirty() {
+    _markDirty = true;
+    // this is done instead of just notifyListeners() so as to differentiate
+    // betweena adhoc calls to widgetsWithScreenPositions
+    // if you need to call notifyListeners() from within this class,
+    // it should always be with markDirty()
+    notifyListeners();
+  }
+
   // ==================== Child Management ====================
 
   /// Add a child at a given position with a widget. Returns the child ID.
@@ -101,7 +118,7 @@ class LazyCanvasController with ChangeNotifier {
     }
     _children[_nextId] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
     _spatialHash.add(position.toPoint(), _nextId); // add to spatial hash
-    notifyListeners();
+    markDirty();
     return _nextId++;
   }
 
@@ -112,7 +129,7 @@ class LazyCanvasController with ChangeNotifier {
     }
     _spatialHash.remove(_children[id]!.gsPosition.toPoint());
     _children.remove(id);
-    notifyListeners();
+    markDirty();
   }
 
   /// Remove all children. Does not change where you are on the canvas.
@@ -120,14 +137,14 @@ class LazyCanvasController with ChangeNotifier {
     _children.clear();
     _spatialHash.clear();
     _nextId = 0;
-    notifyListeners();
+    markDirty();
   }
 
   /// Update the position of a child by its ID.
   int updatePosition(int id, Offset newPosition) {
     if (_children.containsKey(id)) {
       _children[id]!.gsPosition = newPosition;
-      notifyListeners();
+      markDirty();
       return id;
     } else {
       throw _ChildNotFoundException;
@@ -141,7 +158,7 @@ class LazyCanvasController with ChangeNotifier {
       // Create a new _ChildInfo with the new widget
       _children[id] = _ChildInfo(gsPosition: child.gsPosition, widget: newWidget)
         ..lastRenderedSize = child.lastRenderedSize;
-      notifyListeners();
+      markDirty();
     } else {
       throw _ChildNotFoundException;
     }
@@ -183,7 +200,7 @@ class LazyCanvasController with ChangeNotifier {
       _gsTopLeftOffset -= details.focalPointDelta / _scale;
     }
 
-    notifyListeners();
+    markDirty();
   }
 
   /// Increment or decrement the scale by an additive delta value.
@@ -192,7 +209,7 @@ class LazyCanvasController with ChangeNotifier {
     final newScale = _scale + delta;
     _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, focalPoint, _scale, newScale);
     _scale = newScale;
-    notifyListeners();
+    markDirty();
   }
 
   // ==================== Positioning Logic ====================
@@ -207,9 +224,18 @@ class LazyCanvasController with ChangeNotifier {
       _firstBuild = false;
     }
 
+    if (!_renderCacheDirty && !forceRebuild) {
+      // if the render cache is not dirty, we can use the cached result
+      return _lastRenderedWidgets;
+    }
+
+    _lastProcessedOffset = _gsTopLeftOffset;
+    _lastProcessedScale = _scale;
+    _markDirty = false;
+
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 
-    return idsToBuild.map((id) {
+    return _lastRenderedWidgets = idsToBuild.map((id) {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.widget;
@@ -239,7 +265,7 @@ class LazyCanvasController with ChangeNotifier {
       animateToOffsetAndScale(offset: newGsTopLeft, duration: duration, scale: _scale);
     } else {
       _gsTopLeftOffset = newGsTopLeft;
-      notifyListeners();
+      markDirty();
     }
   }
 
@@ -299,7 +325,7 @@ class LazyCanvasController with ChangeNotifier {
     } else {
       _gsTopLeftOffset = newGsTopLeft;
       _scale = newScale;
-      notifyListeners();
+      markDirty();
     }
   }
 
@@ -322,7 +348,7 @@ class LazyCanvasController with ChangeNotifier {
     anim.addListener(() {
       _gsTopLeftOffset = offsetAnimation.value;
       _scale = scaleAnimation.value;
-      notifyListeners();
+      markDirty();
     });
 
     await anim.forward();
