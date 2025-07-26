@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Utility to synchronously measure the size of a widget by building it offscreen in an Overlay.
 /// Only works for widgets with deterministic, constraint-based sizing (no async/layout dependencies).
-Size measureWidgetSize(BuildContext context, WidgetBuilder builder, {BoxConstraints? constraints}) {
+Size measureWidgetSize(BuildContext context, Widget child, {BoxConstraints? constraints}) {
   final key = GlobalKey();
   final overlay = Overlay.of(context);
   Size? measuredSize;
@@ -10,7 +10,7 @@ Size measureWidgetSize(BuildContext context, WidgetBuilder builder, {BoxConstrai
   final widget = Offstage(
     child: ConstrainedBox(
       constraints: constraints ?? const BoxConstraints(),
-      child: Container(key: key, child: builder(context)),
+      child: Container(key: key, child: child),
     ),
   );
 

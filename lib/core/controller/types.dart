@@ -11,7 +11,7 @@ class _ChildInfo {
   Size? lastRenderedSize;
   final Widget widget;
 
-  _ChildInfo({required this.gsPosition, required this.widget});
+  _ChildInfo({required this.gsPosition, required this.widget, this.lastRenderedSize});
 }
 
 class ChildInfo {
