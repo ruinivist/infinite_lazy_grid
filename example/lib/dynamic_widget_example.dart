@@ -116,9 +116,7 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
               ],
             ),
           ),
-          Expanded(
-            child: LazyCanvas(controller: controller, canvasBackground: const DotGridBackround()),
-          ),
+          Expanded(child: LazyCanvas(controller: controller)),
         ],
       ),
     );

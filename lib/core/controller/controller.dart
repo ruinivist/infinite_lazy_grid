@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:infinite_lazy_grid/core/background.dart';
 import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
 import '../../utils/offset_extensions.dart';
@@ -28,6 +29,7 @@ class LazyCanvasController with ChangeNotifier {
   late BuildContext _context;
   bool _firstBuild = true;
   int? _focusChildOnInit; // if set, will focus on this child on first build
+  CanvasBackground background;
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -37,6 +39,7 @@ class LazyCanvasController with ChangeNotifier {
     Offset? buildCacheExtent,
     Size hashCellSize = const Size(100, 100),
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
+    this.background = const DotGridBackground(),
   }) : _hashCellSize = hashCellSize,
        _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
   // only top left is considered so if a widget has long width, it'll not be rendered

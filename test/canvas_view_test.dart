@@ -19,9 +19,7 @@ void main() {
     }
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
-        ),
+        home: Scaffold(body: LazyCanvas(controller: controller)),
       ),
     );
     await tester.pumpAndSettle();
@@ -49,9 +47,7 @@ void main() {
     controller.addChild(const Offset(100, 100), TestChild(index: 1));
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
-        ),
+        home: Scaffold(body: LazyCanvas(controller: controller)),
       ),
     );
     await tester.pumpAndSettle();
