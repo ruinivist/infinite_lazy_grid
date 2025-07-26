@@ -16,7 +16,8 @@ void main() {
       spatialHashing.add(point, 'A');
       final results = spatialHashing.getPointsAround(point, const Offset(0, 0));
       expect(results.length, 1);
-      expect(results.first, (point, 'A'));
+      expect(results.first.point, point);
+      expect(results.first.data, 'A');
     });
 
     test('remove point', () {
@@ -34,8 +35,8 @@ void main() {
       spatialHashing.add(p2, 'B');
       final results = spatialHashing.getPointsAround(p1, const Offset(0, 0));
       expect(results.length, 2);
-      expect(results, contains((p1, 'A')));
-      expect(results, contains((p2, 'B')));
+      expect(results.any((pointData) => pointData.point == p1 && pointData.data == 'A'), isTrue);
+      expect(results.any((pointData) => pointData.point == p2 && pointData.data == 'B'), isTrue);
     });
 
     test('add points in different cells and query with offset', () {
@@ -46,8 +47,8 @@ void main() {
       // Query with offset to include both cells
       final results = spatialHashing.getPointsAround(p1, const Offset(10, 10));
       expect(results.length, 2);
-      expect(results, contains((p1, 'A')));
-      expect(results, contains((p2, 'B')));
+      expect(results.any((pointData) => pointData.point == p1 && pointData.data == 'A'), isTrue);
+      expect(results.any((pointData) => pointData.point == p2 && pointData.data == 'B'), isTrue);
     });
 
     test('removing one of multiple points in a cell', () {
@@ -58,7 +59,8 @@ void main() {
       spatialHashing.remove(p1);
       final results = spatialHashing.getPointsAround(p2, const Offset(0, 0));
       expect(results.length, 1);
-      expect(results.first, (p2, 'B'));
+      expect(results.first.point, p2);
+      expect(results.first.data, 'B');
     });
   });
 }

@@ -1,4 +1,4 @@
-import './app.dart';
+import 'simple_example.dart';
 import './caching_test.dart';
 import './dynamic_widget_example.dart';
 import 'package:flutter/material.dart';
@@ -27,9 +27,9 @@ class ExampleChooser extends StatelessWidget {
           children: [
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const App()));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SimpleExample()));
               },
-              child: const Text('Original Example'),
+              child: const Text('Simple Example'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -50,8 +50,8 @@ class ExampleChooser extends StatelessWidget {
               padding: EdgeInsets.all(16.0),
               child: Text(
                 'Examples:\n'
-                '• Original: Basic usage demo\n'
-                '• Caching Test: Shows Flutter\'s automatic widget optimization\n'
+                '• Simple: Basic usage demo\n'
+                '• Caching Test: To sanity check build counts\n'
                 '• Dynamic Inputs: How to handle changing widget data',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey),

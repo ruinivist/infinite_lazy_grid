@@ -49,6 +49,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
             canvasBackground: widget.canvasBackground,
             ssPositions: ssPositions,
             scale: widget.controller.scale,
+            gridSpaceOffset: widget.controller.offset,
             onCanvasSizeChange: widget.controller.onCanvasSizeChange,
             onChildSizeChange: widget.controller.onChildSizeChange,
             children: children,
@@ -83,6 +84,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
   final List<int> childrenIds;
   final List<Offset> ssPositions;
   final double scale;
+  final Offset gridSpaceOffset;
   final CanvasBackground canvasBackground;
   final Function onCanvasSizeChange;
   final Function onChildSizeChange;
@@ -91,6 +93,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
     required this.childrenIds,
     required this.ssPositions,
     required this.scale,
+    required this.gridSpaceOffset,
     required this.canvasBackground,
     required this.onCanvasSizeChange,
     required this.onChildSizeChange,
@@ -104,6 +107,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
       childrenIds: childrenIds,
       ssPositions: ssPositions,
       scale: scale,
+      gridSpaceOffset: gridSpaceOffset,
       canvasBackground: canvasBackground,
       onCanvasSizeChange: onCanvasSizeChange,
       onChildSizeChange: onChildSizeChange,
@@ -116,6 +120,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
       ..childrenIds = childrenIds
       ..ssPositions = ssPositions
       ..canvasBackground = canvasBackground
+      ..gridSpaceOffset = gridSpaceOffset
       ..scale = scale;
   }
 }
@@ -133,6 +138,7 @@ class _CanvasRenderBox extends RenderBox
   CanvasBackground _canvasBackground;
   List<int> _childrenIds;
   List<Offset> _ssPositions;
+  Offset _gridSpaceOffset;
   double _scale;
   Function onCanvasSizeChange;
   Function onChildSizeChange;
@@ -141,6 +147,7 @@ class _CanvasRenderBox extends RenderBox
     required childrenIds,
     required ssPositions,
     required scale,
+    required gridSpaceOffset,
     required canvasBackground,
     required this.onCanvasSizeChange,
     required this.onChildSizeChange,
@@ -148,6 +155,7 @@ class _CanvasRenderBox extends RenderBox
        _childrenIds = childrenIds,
        _ssPositions = ssPositions,
        _scale = scale,
+       _gridSpaceOffset = gridSpaceOffset,
        _canvasBackground = canvasBackground;
 
   @override
@@ -177,6 +185,13 @@ class _CanvasRenderBox extends RenderBox
     if (_scale != scale) {
       _scale = scale;
       markNeedsLayout();
+    }
+  }
+
+  set gridSpaceOffset(Offset gridSpaceOffset) {
+    if (_gridSpaceOffset != gridSpaceOffset) {
+      _gridSpaceOffset = gridSpaceOffset;
+      markNeedsPaint();
     }
   }
 
@@ -215,8 +230,13 @@ class _CanvasRenderBox extends RenderBox
   @override
   void paint(PaintingContext context, Offset canvasStartOffset) {
     assert(childCount == _ssPositions.length);
+
+    // Clip to bounds before any painting, due to extent cache you may get the point ouside bounds
+    context.canvas.save();
+    context.canvas.clipRect(canvasStartOffset & size);
+
     // use the canvas background painter, pass it the canvas and that should handle drawing the background
-    _canvasBackground.paint(context.canvas, canvasStartOffset, _scale, size);
+    _canvasBackground.paint(context.canvas, canvasStartOffset, _gridSpaceOffset, _scale, size);
 
     // though using ssPositionns here directly worked for me but docs using the parentData
     // to get this info is the convention as child can be reordered ( though this will always
@@ -231,11 +251,13 @@ class _CanvasRenderBox extends RenderBox
       final drawAt = canvasStartOffset + childParentData.offset;
       context.canvas.translate(drawAt.dx, drawAt.dy);
       context.canvas.scale(childParentData.scale, childParentData.scale);
-      context.paintChild(child, Offset.zero); // pain at 0 as already translated
+      context.paintChild(child, Offset.zero); // paint at 0 as already translated
 
       context.canvas.restore();
       child = childParentData.nextSibling;
     }
+
+    context.canvas.restore(); // clip restore
   }
 
   @override

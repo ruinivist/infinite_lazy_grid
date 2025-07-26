@@ -22,9 +22,11 @@ class _FpsState extends State<Fps> {
     double elapsedSeconds = (elapsedMicroseconds - _lastFrameTime) * 1e-6;
     if (elapsedSeconds != 0) {
       _lastFrameTime = elapsedMicroseconds;
-      setState(() {
-        _frameRate = '${(1.0 / elapsedSeconds).toStringAsFixed(2)} fps';
-      });
+      if (mounted) {
+        setState(() {
+          _frameRate = '${(1.0 / elapsedSeconds).toStringAsFixed(2)} fps';
+        });
+      }
     }
     // redraw if mounted
     if (mounted) {
