@@ -28,10 +28,15 @@ class LazyCanvasController with ChangeNotifier {
   late BuildContext _context;
 
   bool debug;
+  final Duration defaultAnimationDuration;
 
-  LazyCanvasController({this.debug = false, Offset? buildCacheExtent, Size hashCellSize = const Size(100, 100)})
-    : _hashCellSize = hashCellSize,
-      _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
+  LazyCanvasController({
+    this.debug = false,
+    Offset? buildCacheExtent,
+    Size hashCellSize = const Size(100, 100),
+    this.defaultAnimationDuration = const Duration(milliseconds: 300),
+  }) : _hashCellSize = hashCellSize,
+       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
   {
@@ -284,10 +289,10 @@ class LazyCanvasController with ChangeNotifier {
   Future<void> animateToOffsetAndScale({
     required Offset offset,
     required double scale,
-    Duration? duration = const Duration(milliseconds: 300),
+    Duration? duration,
     Curve curve = Curves.easeInOut,
   }) async {
-    final anim = AnimationController(vsync: _ticker!, duration: duration);
+    final anim = AnimationController(vsync: _ticker!, duration: duration ?? defaultAnimationDuration);
     final offsetTween = Tween<Offset>(begin: _gsTopLeftOffset, end: offset);
     final scaleTween = Tween<double>(begin: _scale, end: scale);
 
