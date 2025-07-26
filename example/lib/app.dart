@@ -19,7 +19,7 @@ class _AppState extends State<App> {
     for (int i = 0; i < 10; i++) {
       controller.addChild(
         Offset((i % 80) * 100.0, (i ~/ 80) * 100.0),
-        (_) => GestureDetector(
+        GestureDetector(
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
             controller.focusOnChild(context, i);

@@ -77,9 +77,9 @@ class LazyCanvasController with ChangeNotifier {
 
   // ==================== Child Management ====================
 
-  /// Add a child at a given position with a builder. Returns the child ID.
-  int addChild(Offset position, WidgetBuilder builder) {
-    _children[_nextId] = _ChildInfo(gsPosition: position, builder: builder);
+  /// Add a child at a given position with a widget. Returns the child ID.
+  int addChild(Offset position, Widget widget) {
+    _children[_nextId] = _ChildInfo(gsPosition: position, widget: widget);
     _spatialHash.add(position.toPoint(), _nextId); // add to spatial hash
     notifyListeners();
     return _nextId++;
@@ -112,6 +112,19 @@ class LazyCanvasController with ChangeNotifier {
       _children[id]!.gsPosition = newPosition;
       notifyListeners();
       return id;
+    } else {
+      throw _ChildNotFoundException;
+    }
+  }
+
+  /// Update a child's widget.
+  void updateChildWidget(int id, Widget newWidget) {
+    if (_children.containsKey(id)) {
+      final child = _children[id]!;
+      // Create a new _ChildInfo with the new widget
+      _children[id] = _ChildInfo(gsPosition: child.gsPosition, widget: newWidget)
+        ..lastRenderedSize = child.lastRenderedSize;
+      notifyListeners();
     } else {
       throw _ChildNotFoundException;
     }
@@ -183,7 +196,7 @@ class LazyCanvasController with ChangeNotifier {
     return _renderedChildrenCache = idsToBuild.map((id) {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
-      var child = item.builder(context);
+      var child = item.widget;
       if (debug) child = _Debug(id: id, gs: item.gsPosition, ss: ssPosition, child: child);
       return ChildInfo(id: id, gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
     }).toList();
@@ -237,7 +250,7 @@ class LazyCanvasController with ChangeNotifier {
     // else do an offstage render
     childSize ??= childInfo.lastRenderedSize != null && !forceRedraw
         ? childInfo.lastRenderedSize
-        : measureWidgetSize(context, childInfo.builder);
+        : measureWidgetSize(context, (_) => childInfo.widget);
 
     /*
     margin is symmatric on ltrb so

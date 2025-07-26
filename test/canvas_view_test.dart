@@ -15,7 +15,7 @@ void main() {
   testWidgets('CanvasView renders only visible children and reduces count on zoom out', (WidgetTester tester) async {
     final controller = LazyCanvasController(debug: true);
     for (int i = 0; i < 10000; i++) {
-      controller.addChild(Offset((i % 80) * 100.0, (i ~/ 80) * 100.0), (_) => TestChild(index: i));
+      controller.addChild(Offset((i % 80) * 100.0, (i ~/ 80) * 100.0), TestChild(index: i));
     }
     await tester.pumpWidget(
       MaterialApp(
@@ -45,8 +45,8 @@ void main() {
 
   testWidgets('CanvasView scales as expected', (WidgetTester tester) async {
     final controller = LazyCanvasController(debug: true);
-    controller.addChild(const Offset(0, 0), (_) => TestChild(index: 0));
-    controller.addChild(const Offset(100, 100), (_) => TestChild(index: 1));
+    controller.addChild(const Offset(0, 0), TestChild(index: 0));
+    controller.addChild(const Offset(100, 100), TestChild(index: 1));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
