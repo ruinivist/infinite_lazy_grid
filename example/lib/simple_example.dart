@@ -28,6 +28,28 @@ class _SimpleExampleState extends State<SimpleExample> {
         ),
       );
     }
+    controller.addChild(
+      const Offset(0, 200),
+      Container(
+        width: 300,
+        height: 150,
+        color: Colors.grey[200],
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              'This is a very long text inside a scrollable container. '
+              'You can scroll to see more content. '
+              'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '
+              'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. '
+              'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. '
+              'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override

@@ -246,14 +246,22 @@ class _CanvasRenderBox extends RenderBox
     while (child != null) {
       final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
 
-      context.canvas.save();
-      // relying purely on canvas manips here
       final drawAt = canvasStartOffset + childParentData.offset;
-      context.canvas.translate(drawAt.dx, drawAt.dy);
-      context.canvas.scale(childParentData.scale, childParentData.scale);
-      context.paintChild(child, Offset.zero); // paint at 0 as already translated
 
-      context.canvas.restore();
+      // Apply transformation using pushTransform for proper coordinate handling
+      final transform = Matrix4.identity()
+        ..translate(drawAt.dx, drawAt.dy)
+        ..scale(childParentData.scale, childParentData.scale);
+
+      // Note: initially I was using context.canvas.translate and context.canvas.scale
+      // but that doesn't work with say using a SingleChildScrollView inside a child
+      // so using pushTransform is the way to go here
+
+      // 0 offset since transform will take care of it
+      context.pushTransform(needsCompositing, Offset.zero, transform, (context, offset) {
+        context.paintChild(child!, Offset.zero);
+      });
+
       child = childParentData.nextSibling;
     }
 
