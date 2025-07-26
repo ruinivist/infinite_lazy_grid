@@ -9,9 +9,9 @@ final _ChildNotFoundException = Exception('Child with the given ID does not exis
 class _ChildInfo {
   Offset gsPosition;
   Size? lastRenderedSize;
-  final WidgetBuilder builder;
+  final Widget widget;
 
-  _ChildInfo({required this.gsPosition, required this.builder});
+  _ChildInfo({required this.gsPosition, required this.widget});
 }
 
 class ChildInfo {
