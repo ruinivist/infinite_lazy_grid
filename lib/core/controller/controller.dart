@@ -26,6 +26,8 @@ class LazyCanvasController with ChangeNotifier {
   late final SpatialHashing<int> _spatialHash;
   TickerProvider? _ticker;
   late BuildContext _context;
+  bool _firstBuild = true;
+  int? _focusChildOnInit; // if set, will focus on this child on first build
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -60,7 +62,7 @@ class LazyCanvasController with ChangeNotifier {
     _buildExtent = Offset(size.width, size.height) + (_buildCacheExtent ?? Offset(size.width * 0.1, size.height * 0.1));
     _canvasSize = size; // allow resize due to canvas resize
 
-    // if the first init, re-render as not I have the canvas size to build widgets
+    // if the first init, re-render as I don't have the canvas size to build widgets
     if (!_init) {
       _init = true;
       Future.microtask(notifyListeners);
@@ -84,8 +86,17 @@ class LazyCanvasController with ChangeNotifier {
   // ==================== Child Management ====================
 
   /// Add a child at a given position with a widget. Returns the child ID.
-  int addChild(Offset position, Widget widget) {
-    _children[_nextId] = _ChildInfo(gsPosition: position, widget: widget);
+  /// You need the child size for optimising the focus on child
+  int addChild(Offset position, Widget widget, {bool focusOnInit = false, Size? childSize}) {
+    if (focusOnInit) {
+      assert(
+        childSize != null,
+        'Child size must be provided when focusing on init (to know positions before any build). Else, you must call focusOnChild in a post frame callback.',
+      );
+      assert(_focusChildOnInit == null, 'Focus child on init is already set. Cannot set it again.');
+      _focusChildOnInit = _nextId;
+    }
+    _children[_nextId] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
     _spatialHash.add(position.toPoint(), _nextId); // add to spatial hash
     notifyListeners();
     return _nextId++;
@@ -187,6 +198,12 @@ class LazyCanvasController with ChangeNotifier {
   List<ChildInfo> widgetsWithScreenPositions({bool forceRebuild = false}) {
     if (!_init) return [];
 
+    if (_firstBuild && _focusChildOnInit != null) {
+      // if this is the first build, focus on the child if set
+      focusOnChild(_focusChildOnInit!, animate: false);
+      _firstBuild = false;
+    }
+
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
 
     return idsToBuild.map((id) {
@@ -246,7 +263,7 @@ class LazyCanvasController with ChangeNotifier {
     // else do an offstage render
     childSize ??= childInfo.lastRenderedSize != null && !forceRedraw
         ? childInfo.lastRenderedSize
-        : measureWidgetSize(_context, (_) => childInfo.widget);
+        : measureWidgetSize(_context, childInfo.widget);
 
     /*
     margin is symmatric on ltrb so
