@@ -36,6 +36,7 @@ class LazyCanvasController with ChangeNotifier {
   Offset? _lastProcessedOffset;
   double? _lastProcessedScale;
   bool _markDirty = false; // do any of the non scale or offset changes require a rebuild?
+  final bool useIdsFromArgs;
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -46,6 +47,7 @@ class LazyCanvasController with ChangeNotifier {
     Size hashCellSize = const Size(100, 100),
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
     this.background = const DotGridBackground(),
+    this.useIdsFromArgs = false,
   }) : _hashCellSize = hashCellSize,
        _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
   // only top left is considered so if a widget has long width, it'll not be rendered
@@ -108,8 +110,15 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Add a child at a given position with a widget. Returns the child ID.
   /// You need the child size for optimising the focus on child
-  CanvasChildId addChild(Offset position, Widget widget, {bool focusOnInit = false, Size? childSize}) {
-    final id = _uuid.v4();
+  CanvasChildId addChild(
+    Offset position,
+    Widget widget, {
+    bool focusOnInit = false,
+    Size? childSize,
+    CanvasChildId? id,
+  }) {
+    assert(!useIdsFromArgs && useIdsFromArgs && id == null);
+    id ??= _uuid.v4();
     if (focusOnInit) {
       assert(
         childSize != null,
