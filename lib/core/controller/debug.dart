@@ -1,7 +1,7 @@
 part of 'controller.dart';
 
 class _Debug extends StatelessWidget {
-  final int id;
+  final CanvasChildId id;
   final Offset gs, ss;
   final Widget child;
 

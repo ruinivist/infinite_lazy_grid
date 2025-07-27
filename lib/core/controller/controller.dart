@@ -9,26 +9,27 @@ import '../../utils/size_extensions.dart';
 import '../../utils/conversions.dart';
 import '../../utils/styles.dart';
 import '../render.dart';
+import 'package:uuid/uuid.dart';
 
 part 'debug.dart';
 part 'types.dart';
 
 /// Controller for [LazyCanvas]
 class LazyCanvasController with ChangeNotifier {
-  int _nextId = 0; // surely we won't run out of IDs, Clueless
+  final Uuid _uuid = Uuid();
   Offset _gsTopLeftOffset = Offset.zero;
   double _baseScale = 1, _scale = 1;
   late Size _canvasSize;
-  final HashMap<int, _ChildInfo> _children = HashMap<int, _ChildInfo>(); // int for IDs
+  final HashMap<CanvasChildId, _ChildInfo> _children = HashMap<CanvasChildId, _ChildInfo>(); // CanvasChildId for IDs
   final Offset? _buildCacheExtent;
   late Offset _buildExtent;
   final Size _hashCellSize;
   bool _init = false;
-  late final SpatialHashing<int> _spatialHash;
+  late final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
   late BuildContext _context;
   bool _firstBuild = true;
-  int? _focusChildOnInit; // if set, will focus on this child on first build
+  CanvasChildId? _focusChildOnInit; // if set, will focus on this child on first build
   CanvasBackground background;
   // these are used to cache result of widgetsWithScreenPositions
   List<ChildInfo> _lastRenderedWidgets = [];
@@ -50,7 +51,7 @@ class LazyCanvasController with ChangeNotifier {
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
   {
-    _spatialHash = SpatialHashing<int>(cellSize: _hashCellSize);
+    _spatialHash = SpatialHashing<CanvasChildId>(cellSize: _hashCellSize);
   }
 
   // ==================== Getters ====================
@@ -79,7 +80,7 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Called when a child widget's size changes.
-  void onChildSizeChange(int id, Size size) {
+  void onChildSizeChange(CanvasChildId id, Size size) {
     _children[id]!.lastRenderedSize = size;
   }
 
@@ -107,23 +108,24 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Add a child at a given position with a widget. Returns the child ID.
   /// You need the child size for optimising the focus on child
-  int addChild(Offset position, Widget widget, {bool focusOnInit = false, Size? childSize}) {
+  CanvasChildId addChild(Offset position, Widget widget, {bool focusOnInit = false, Size? childSize}) {
+    final id = _uuid.v4();
     if (focusOnInit) {
       assert(
         childSize != null,
         'Child size must be provided when focusing on init (to know positions before any build). Else, you must call focusOnChild in a post frame callback.',
       );
       assert(_focusChildOnInit == null, 'Focus child on init is already set. Cannot set it again.');
-      _focusChildOnInit = _nextId;
+      _focusChildOnInit = id;
     }
-    _children[_nextId] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
-    _spatialHash.add(position.toPoint(), _nextId); // add to spatial hash
+    _children[id] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
+    _spatialHash.add(position.toPoint(), id); // add to spatial hash
     markDirty();
-    return _nextId++;
+    return id;
   }
 
   /// Remove a child by its ID.
-  void removeChild(int id) {
+  void removeChild(CanvasChildId id) {
     if (!_children.containsKey(id)) {
       throw _ChildNotFoundException;
     }
@@ -136,12 +138,11 @@ class LazyCanvasController with ChangeNotifier {
   void clear() {
     _children.clear();
     _spatialHash.clear();
-    _nextId = 0;
     markDirty();
   }
 
   /// Update the position of a child by its ID.
-  int updatePosition(int id, Offset newPosition) {
+  CanvasChildId updatePosition(CanvasChildId id, Offset newPosition) {
     if (_children.containsKey(id)) {
       _children[id]!.gsPosition = newPosition;
       markDirty();
@@ -152,7 +153,7 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Update a child's widget.
-  void updateChildWidget(int id, Widget newWidget) {
+  void updateChildWidget(CanvasChildId id, Widget newWidget) {
     if (_children.containsKey(id)) {
       final child = _children[id]!;
       // Create a new _ChildInfo with the new widget
@@ -165,7 +166,7 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Get the position of a child by its ID.
-  Offset getPosition(int id) {
+  Offset getPosition(CanvasChildId id) {
     if (_children.containsKey(id)) {
       return _children[id]!.gsPosition;
     } else {
@@ -244,7 +245,7 @@ class LazyCanvasController with ChangeNotifier {
     }).toList();
   }
 
-  List<int> _childrenWithinBuildArea(Offset center, Offset extent) {
+  List<CanvasChildId> _childrenWithinBuildArea(Offset center, Offset extent) {
     Offset halfExtent = Offset((extent.dx / (2 * _scale)).ceilToDouble(), (extent.dy / (2 * _scale)).ceilToDouble());
     final items = _spatialHash.getPointsAround(center.toPoint(), halfExtent);
     return items.map((item) => item.data).toList(); // data is the child id here
@@ -274,7 +275,7 @@ class LazyCanvasController with ChangeNotifier {
   /// an offstage rendering will be used ( double render )
   /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
   void focusOnChild(
-    int id, {
+    CanvasChildId id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
     bool animate = true,
     double preferredHorizontalMargin = 16,

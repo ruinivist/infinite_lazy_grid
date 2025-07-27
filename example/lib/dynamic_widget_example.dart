@@ -12,6 +12,11 @@ class DynamicWidgetExample extends StatefulWidget {
 class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
   final LazyCanvasController controller = LazyCanvasController(debug: false);
 
+  // Store child IDs for later reference
+  late CanvasChildId selfManagedId;
+  late CanvasChildId externalDataId;
+  late CanvasChildId reactiveId;
+
   // Simulate some dynamic data
   int counter = 0;
   String message = "Hello World";
@@ -25,16 +30,16 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
 
   void _setupWidgets() {
     // Approach 1: Using StatefulWidget with state inside the widget getting lost if unmounted
-    controller.addChild(const Offset(0, 0), SelfManagedCounterWidget(label: "Self-Managed"));
+    selfManagedId = controller.addChild(const Offset(0, 0), SelfManagedCounterWidget(label: "Self-Managed"));
 
     // Approach 2: Using updateChildWidget, you need this since the children dep tree is direcly managed by the controller
-    controller.addChild(
+    externalDataId = controller.addChild(
       const Offset(200, 0),
       ExternalDataWidget(counter: counter, message: message, color: selectedColor),
     );
 
     // Approach 3: Using ValueListenableBuilder for reactive updates
-    controller.addChild(
+    reactiveId = controller.addChild(
       const Offset(400, 0),
       ValueListenableBuilder<int>(
         valueListenable: _counterNotifier,
@@ -71,7 +76,7 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
     // Approach 2: Update the widget when external data changes
     // Use ValueKey to ensure Flutter recognizes this as a different widget
     controller.updateChildWidget(
-      1, // Widget ID (second widget added)
+      externalDataId, // Use the stored widget ID
       ExternalDataWidget(
         // key: ValueKey('external_$counter'), // Force rebuild with unique key
         counter: counter,

@@ -81,7 +81,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
 /// A combined widget for all the render object of the children + background.
 /// Everything is in screen space here
 class _CanvasRenderObject extends MultiChildRenderObjectWidget {
-  final List<int> childrenIds;
+  final List<CanvasChildId> childrenIds;
   final List<Offset> ssPositions;
   final double scale;
   final Offset gridSpaceOffset;
@@ -127,7 +127,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
 
 class _CanvasWidgetParentData extends ContainerBoxParentData<RenderBox> {
   // there is already an "offset" defined in BoxParentdata that is exactly what I want
-  late int id;
+  late CanvasChildId id;
   late double scale; // scale is same for all rn but this makes it trivial to expand to children with diff scales
 }
 
@@ -136,7 +136,7 @@ class _CanvasRenderBox extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _CanvasWidgetParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _CanvasWidgetParentData> {
   CanvasBackground _canvasBackground;
-  List<int> _childrenIds;
+  List<CanvasChildId> _childrenIds;
   List<Offset> _ssPositions;
   Offset _gridSpaceOffset;
   double _scale;
@@ -175,7 +175,7 @@ class _CanvasRenderBox extends RenderBox
     }
   }
 
-  set childrenIds(List<int> childrenIds) {
+  set childrenIds(List<CanvasChildId> childrenIds) {
     if (_childrenIds != childrenIds) {
       _childrenIds = childrenIds;
     }

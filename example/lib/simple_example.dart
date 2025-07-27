@@ -12,21 +12,23 @@ class SimpleExample extends StatefulWidget {
 
 class _SimpleExampleState extends State<SimpleExample> {
   final LazyCanvasController controller = LazyCanvasController(debug: true);
+  final List<CanvasChildId> childIds = [];
 
   @override
   void initState() {
     super.initState();
     for (int i = 0; i < 10; i++) {
-      controller.addChild(
+      final id = controller.addChild(
         Offset((i % 80) * 100.0, (i ~/ 80) * 100.0),
         GestureDetector(
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
-            controller.focusOnChild(i);
+            controller.focusOnChild(childIds[i]);
           },
           child: InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
         ),
       );
+      childIds.add(id);
     }
     controller.addChild(
       const Offset(0, 200),

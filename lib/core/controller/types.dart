@@ -15,7 +15,7 @@ class _ChildInfo {
 }
 
 class ChildInfo {
-  int id;
+  CanvasChildId id;
   Offset gsPosition;
   Offset ssPosition;
   Widget child;
@@ -23,3 +23,5 @@ class ChildInfo {
 }
 
 enum ScalingMode { resetScale, keepScale, fitInViewport }
+
+typedef CanvasChildId = String;
