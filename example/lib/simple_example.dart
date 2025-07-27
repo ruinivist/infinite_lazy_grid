@@ -78,7 +78,7 @@ class _SimpleExampleState extends State<SimpleExample> {
       ),
       body: Stack(
         children: [
-          LazyCanvas(controller: controller, canvasBackground: SingleColorBackround(Colors.white)),
+          LazyCanvas(controller: controller),
           Positioned(bottom: 64, left: 16, child: Fps()),
         ],
       ),

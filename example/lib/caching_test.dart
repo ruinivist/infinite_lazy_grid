@@ -65,9 +65,7 @@ class _CachingTestAppState extends State<CachingTestApp> {
               style: TextStyle(fontSize: 12),
             ),
           ),
-          Expanded(
-            child: LazyCanvas(controller: controller, canvasBackground: const DotGridBackround()),
-          ),
+          Expanded(child: LazyCanvas(controller: controller)),
         ],
       ),
       floatingActionButton: Column(

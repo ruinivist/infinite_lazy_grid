@@ -9,10 +9,9 @@ import 'controller/controller.dart';
 /// An infinite canvas that places all the children at the specified positions.
 /// Needs a [LazyCanvasController] to control the canvas and a [CanvasBackground] to draw the background.
 class LazyCanvas extends StatefulWidget {
-  final CanvasBackground canvasBackground;
   final LazyCanvasController controller;
 
-  const LazyCanvas({required this.controller, required this.canvasBackground, super.key});
+  const LazyCanvas({required this.controller, super.key});
 
   @override
   State<LazyCanvas> createState() => _LazyCanvasState();
@@ -47,7 +46,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
           final children = childrenWithPositions.map((e) => e.child).toList();
           final canvas = _CanvasRenderObject(
             childrenIds: childrenIds,
-            canvasBackground: widget.canvasBackground,
+            canvasBackground: widget.controller.background,
             ssPositions: ssPositions,
             scale: widget.controller.scale,
             gridSpaceOffset: widget.controller.offset,

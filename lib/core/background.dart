@@ -34,12 +34,12 @@ class SingleColorBackround extends CanvasBackground {
   }
 }
 
-class DotGridBackround extends CanvasBackground {
+class DotGridBackground extends CanvasBackground {
   final double size;
   final double spacing;
   final Color color;
 
-  const DotGridBackround({this.size = 2.0, this.spacing = 50.0, this.color = Colors.black12}) : super();
+  const DotGridBackground({this.size = 2.0, this.spacing = 50.0, this.color = Colors.black12}) : super();
 
   @override
   void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
