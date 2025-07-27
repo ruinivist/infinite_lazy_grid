@@ -1,6 +1,7 @@
 import 'simple_example.dart';
 import './caching_test.dart';
 import './dynamic_widget_example.dart';
+import './render_callbacks_example.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -45,6 +46,13 @@ class ExampleChooser extends StatelessWidget {
               },
               child: const Text('Dynamic Widget Inputs'),
             ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const RenderCallbacksExample()));
+              },
+              child: const Text('Render Callbacks Demo'),
+            ),
             const SizedBox(height: 32),
             const Padding(
               padding: EdgeInsets.all(16.0),
@@ -52,7 +60,8 @@ class ExampleChooser extends StatelessWidget {
                 'Examples:\n'
                 '• Simple: Basic usage demo\n'
                 '• Caching Test: To sanity check build counts\n'
-                '• Dynamic Inputs: How to handle changing widget data',
+                '• Dynamic Inputs: How to handle changing widget data\n'
+                '• Render Callbacks: See widgets enter/exit render area',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey),
               ),

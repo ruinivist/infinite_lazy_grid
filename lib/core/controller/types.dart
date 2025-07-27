@@ -25,3 +25,7 @@ class ChildInfo {
 enum ScalingMode { resetScale, keepScale, fitInViewport }
 
 typedef CanvasChildId = String;
+
+// listener callbacks
+typedef OnWidgetEnteredRender = void Function(CanvasChildId id);
+typedef OnWidgetExitedRender = void Function(CanvasChildId id);

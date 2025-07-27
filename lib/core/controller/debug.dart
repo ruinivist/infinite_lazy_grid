@@ -17,7 +17,7 @@ class _Debug extends StatelessWidget {
           left: 0,
           bottom: -60,
           child: Text(
-            'ID: $id\nGS:(${gs.dx.toInt()},${gs.dy.toInt()})\nSS:(${ss.dx.toInt()},${ss.dy.toInt()})',
+            'ID: ${id.substring(0, 4)}\nGS:(${gs.dx.toInt()},${gs.dy.toInt()})\nSS:(${ss.dx.toInt()},${ss.dy.toInt()})',
             style: monospaceStyle,
           ),
         ),
