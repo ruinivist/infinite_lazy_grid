@@ -37,6 +37,9 @@ class LazyCanvasController with ChangeNotifier {
   double? _lastProcessedScale;
   bool _markDirty = false; // do any of the non scale or offset changes require a rebuild?
   final bool useIdsFromArgs;
+  OnWidgetEnteredRender? onWidgetEnteredRender;
+  OnWidgetExitedRender? onWidgetExitedRender;
+  Set<CanvasChildId> _renderedWidgets = {}; // to track which widgets are currently rendered
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -48,6 +51,8 @@ class LazyCanvasController with ChangeNotifier {
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
     this.background = const DotGridBackground(),
     this.useIdsFromArgs = false,
+    this.onWidgetEnteredRender,
+    this.onWidgetExitedRender,
   }) : _hashCellSize = hashCellSize,
        _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
   // only top left is considered so if a widget has long width, it'll not be rendered
@@ -117,7 +122,7 @@ class LazyCanvasController with ChangeNotifier {
     Size? childSize,
     CanvasChildId? id,
   }) {
-    assert(!useIdsFromArgs && useIdsFromArgs && id == null);
+    assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
     if (focusOnInit) {
       assert(
@@ -173,17 +178,6 @@ class LazyCanvasController with ChangeNotifier {
       throw _ChildNotFoundException;
     }
   }
-
-  /// Get the position of a child by its ID.
-  Offset getPosition(CanvasChildId id) {
-    if (_children.containsKey(id)) {
-      return _children[id]!.gsPosition;
-    } else {
-      throw _ChildNotFoundException;
-    }
-  }
-
-  // ==================== Gesture Handling ====================
 
   /// Called when a scale gesture starts.
   void onScaleStart(ScaleStartDetails details) {
@@ -244,6 +238,24 @@ class LazyCanvasController with ChangeNotifier {
     _markDirty = false;
 
     final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
+
+    // do the needed callbacks
+    if (onWidgetEnteredRender != null || onWidgetExitedRender != null) {
+      final newRenderedWidgets = idsToBuild.toSet();
+      final exitedWidgets = _renderedWidgets.difference(newRenderedWidgets);
+      final enteredWidgets = newRenderedWidgets.difference(_renderedWidgets);
+
+      Future.microtask(() {
+        // so that the build is not blocked
+        for (final id in exitedWidgets) {
+          onWidgetExitedRender?.call(id);
+        }
+        for (final id in enteredWidgets) {
+          onWidgetEnteredRender?.call(id);
+        }
+      });
+    }
+    _renderedWidgets = idsToBuild.toSet();
 
     return _lastRenderedWidgets = idsToBuild.map((id) {
       final item = _children[id]!;
