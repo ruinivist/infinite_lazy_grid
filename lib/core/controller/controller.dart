@@ -208,8 +208,9 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Increment or decrement the scale by an additive delta value.
-  void updateScalebyDelta(double delta) {
-    final focalPoint = Offset(canvasSize.width / 2, canvasSize.height / 2);
+  void updateScalebyDelta(double delta, {Offset? focalPoint}) {
+    // added focalPoint param
+    focalPoint ??= Offset(canvasSize.width / 2, canvasSize.height / 2);
     final newScale = _scale + delta;
     _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, focalPoint, _scale, newScale);
     _scale = newScale;
