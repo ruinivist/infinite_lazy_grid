@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart'; // added for LogicalKeyboardKey
+import 'package:flutter/gestures.dart'; // added for PointerScrollEvent
 import '../utils/offset_extensions.dart';
 
 import '../utils/styles.dart';
@@ -33,46 +35,61 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
   @override
   Widget build(BuildContext context) {
     widget.controller.setBuildContext(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onScaleUpdate: widget.controller.onScaleUpdate,
-      onScaleStart: widget.controller.onScaleStart,
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (_, _) {
-          final childrenWithPositions = widget.controller.widgetsWithScreenPositions();
-          final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
-          final childrenIds = childrenWithPositions.map((e) => e.id).toList();
-          final children = childrenWithPositions.map((e) => e.child).toList();
-          final canvas = _CanvasRenderObject(
-            childrenIds: childrenIds,
-            canvasBackground: widget.controller.background,
-            ssPositions: ssPositions,
-            scale: widget.controller.scale,
-            gridSpaceOffset: widget.controller.offset,
-            onCanvasSizeChange: widget.controller.onCanvasSizeChange,
-            onChildSizeChange: widget.controller.onChildSizeChange,
-            children: children,
-          );
-
-          if (widget.controller.debug) {
-            return Stack(
-              children: [
-                canvas,
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  child: Text(
-                    'Offset: ${widget.controller.offset.coord()}\nScale: ${widget.controller.scale.toStringAsFixed(1)}',
-                    style: monospaceStyle,
-                  ),
-                ),
-              ],
-            );
-          } else {
-            return canvas;
+    return Listener(
+      behavior: HitTestBehavior.translucent, // ensure scroll signals are captured even on empty space
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent) {
+          final pressed = RawKeyboard.instance.keysPressed;
+          if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
+            // Typical mouse wheel up gives negative dy on many platforms; invert if needed
+            final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
+            if (delta != 0) {
+              widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+            }
           }
-        },
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onScaleUpdate: widget.controller.onScaleUpdate,
+        onScaleStart: widget.controller.onScaleStart,
+        child: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (_, _) {
+            final childrenWithPositions = widget.controller.widgetsWithScreenPositions();
+            final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
+            final childrenIds = childrenWithPositions.map((e) => e.id).toList();
+            final children = childrenWithPositions.map((e) => e.child).toList();
+            final canvas = _CanvasRenderObject(
+              childrenIds: childrenIds,
+              canvasBackground: widget.controller.background,
+              ssPositions: ssPositions,
+              scale: widget.controller.scale,
+              gridSpaceOffset: widget.controller.offset,
+              onCanvasSizeChange: widget.controller.onCanvasSizeChange,
+              onChildSizeChange: widget.controller.onChildSizeChange,
+              children: children,
+            );
+
+            if (widget.controller.debug) {
+              return Stack(
+                children: [
+                  canvas,
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Text(
+                      'Offset: ${widget.controller.offset.coord()}\nScale: ${widget.controller.scale.toStringAsFixed(1)}',
+                      style: monospaceStyle,
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              return canvas;
+            }
+          },
+        ),
       ),
     );
   }
@@ -217,7 +234,6 @@ class _CanvasRenderBox extends RenderBox
       childParentData.id = _childrenIds[index];
       childParentData.scale = _scale;
       index++;
-      // loosen so like a stack can take it's own size inside parent
       child.layout(constraints.loosen(), parentUsesSize: true);
 
       // notify the controller about the size of the child
