@@ -37,14 +37,20 @@ class SingleColorBackround extends CanvasBackground {
 class DotGridBackground extends CanvasBackground {
   final double size;
   final double spacing;
-  final Color color;
+  final Color dotColor;
+  final Color backgroundColor;
 
-  const DotGridBackground({this.size = 2.0, this.spacing = 50.0, this.color = Colors.black12}) : super();
+  const DotGridBackground({
+    this.size = 2.0,
+    this.spacing = 50.0,
+    this.dotColor = Colors.black12,
+    this.backgroundColor = Colors.white,
+  }) : super();
 
   @override
   void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
     final paint = Paint()
-      ..color = color
+      ..color = backgroundColor
       ..strokeWidth = 1.0 * scale;
     double scaledSpacing = spacing * scale;
     double scaledSize = size * scale;
@@ -69,7 +75,7 @@ class DotGridBackground extends CanvasBackground {
 
     for (double x = screenStartX; x < screenOffset.dx + canvasSize.width + scaledSpacing; x += scaledSpacing) {
       for (double y = screenStartY; y < screenOffset.dy + canvasSize.height + scaledSpacing; y += scaledSpacing) {
-        canvas.drawCircle(Offset(x, y), scaledSize, paint);
+        canvas.drawCircle(Offset(x, y), scaledSize, paint..color = dotColor);
       }
     }
   }
