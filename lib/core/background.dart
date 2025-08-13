@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import './render.dart';
+import 'dart:ui' as ui show FragmentProgram; // for runtime shader
+import 'package:flutter/rendering.dart' show RendererBinding; // to mark repaint after async load
 
 /// Abstract definition for a [LazyCanvas] background.
 abstract class CanvasBackground {
@@ -35,10 +36,14 @@ class SingleColorBackround extends CanvasBackground {
 }
 
 class DotGridBackground extends CanvasBackground {
-  final double size;
-  final double spacing;
+  final double size; // radius in logical pixels at scale = 1
+  final double spacing; // grid spacing in logical pixels at scale = 1
   final Color dotColor;
   final Color backgroundColor;
+
+  // Static shader program cache shared across instances
+  static ui.FragmentProgram? _program;
+  static Future<ui.FragmentProgram>? _programFuture;
 
   const DotGridBackground({
     this.size = 2.0,
@@ -47,36 +52,89 @@ class DotGridBackground extends CanvasBackground {
     this.backgroundColor = Colors.white,
   }) : super();
 
+  // Kick off async load once
+  static void _ensureProgramLoaded() {
+    if (_program != null || _programFuture != null) return;
+    try {
+      _programFuture = ui.FragmentProgram.fromAsset('packages/infinite_lazy_grid/shaders/dot_grid.frag')
+        ..then((p) {
+          _program = p;
+          // Request a repaint when shader becomes available
+          try {
+            RendererBinding.instance.renderView.markNeedsPaint();
+          } catch (_) {}
+        }).catchError((_) {
+          // keep _program null; we'll fallback to CPU/simple paint
+        });
+    } catch (_) {
+      // fromAsset may throw synchronously on unsupported platforms
+      _programFuture = null;
+      _program = null;
+    }
+  }
+
   @override
   void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
-    final paint = Paint()
+    // Always draw background fill (also serves as fallback while shader loads)
+    final bgPaint = Paint()
       ..color = backgroundColor
-      ..strokeWidth = 1.0 * scale;
-    double scaledSpacing = spacing * scale;
-    double scaledSize = size * scale;
+      ..style = PaintingStyle.fill;
+    final rect = Rect.fromLTWH(screenOffset.dx, screenOffset.dy, canvasSize.width, canvasSize.height);
 
-    // Use canvasOffset to determine the grid position in grid space
-    // Calculate the grid origin in canvas space (0,0 should be at a grid point)
-    // Find the first grid point that aligns with the coordinate system
-    double firstGridX = (canvasOffset.dx / spacing).floor() * spacing;
-    double firstGridY = (canvasOffset.dy / spacing).floor() * spacing;
+    // Ensure shader load started
+    _ensureProgramLoaded();
 
-    // Convert grid space coordinates to screen space
-    double screenStartX = (firstGridX - canvasOffset.dx) * scale + screenOffset.dx;
-    double screenStartY = (firstGridY - canvasOffset.dy) * scale + screenOffset.dy;
-
-    // Ensure we start drawing before the visible area to avoid gaps
-    while (screenStartX > screenOffset.dx) {
-      screenStartX -= scaledSpacing;
-    }
-    while (screenStartY > screenOffset.dy) {
-      screenStartY -= scaledSpacing;
+    final program = _program;
+    if (program == null) {
+      // Fallback: just fill background without dots until shader is ready
+      canvas.drawRect(rect, bgPaint);
+      return;
     }
 
-    for (double x = screenStartX; x < screenOffset.dx + canvasSize.width + scaledSpacing; x += scaledSpacing) {
-      for (double y = screenStartY; y < screenOffset.dy + canvasSize.height + scaledSpacing; y += scaledSpacing) {
-        canvas.drawCircle(Offset(x, y), scaledSize, paint..color = dotColor);
-      }
+    // Device pixel ratio for converting logical -> physical pixels used by FlutterFragCoord
+    final dpr = RendererBinding.instance.renderView.configuration.devicePixelRatio;
+
+    // Compute uniforms in physical pixels
+    final scaledSpacingPx = (spacing * scale * dpr).abs();
+    final radiusPx = (size * scale * dpr).abs();
+
+    // Phase to align grid with world origin under pan/zoom
+    double modPositive(double a, double m) => ((a % m) + m) % m;
+    final phaseXPx = modPositive(canvasOffset.dx * scale * dpr, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
+    final phaseYPx = modPositive(canvasOffset.dy * scale * dpr, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
+
+    final originXPx = screenOffset.dx * dpr;
+    final originYPx = screenOffset.dy * dpr;
+
+    // Build fragment shader and set uniforms in declaration order
+    final shader = program.fragmentShader();
+    int i = 0;
+    void set1(double a) {
+      shader.setFloat(i++, a);
     }
+
+    void set2(double a, double b) {
+      shader.setFloat(i++, a);
+      shader.setFloat(i++, b);
+    }
+
+    void set4c(Color c) {
+      shader.setFloat(i++, c.r);
+      shader.setFloat(i++, c.g);
+      shader.setFloat(i++, c.b);
+      shader.setFloat(i++, c.a);
+    }
+
+    set2(originXPx, originYPx);
+    set1(scaledSpacingPx);
+    set2(phaseXPx, phaseYPx);
+    set1(radiusPx);
+    set4c(dotColor);
+    set4c(backgroundColor);
+
+    final paint = Paint()..shader = shader;
+
+    // Draw once with the shader
+    canvas.drawRect(rect, paint);
   }
 }
