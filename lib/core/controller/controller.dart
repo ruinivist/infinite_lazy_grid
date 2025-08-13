@@ -28,8 +28,7 @@ class LazyCanvasController with ChangeNotifier {
   late final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
   late BuildContext _context;
-  bool _firstBuild = true;
-  CanvasChildId? _focusChildOnInit; // if set, will focus on this child on first build
+  CanvasChildId? _focusChildOnBuild; // if set, will focus on this child on the next render
   CanvasBackground background;
   // these are used to cache result of widgetsWithScreenPositions
   List<ChildInfo> _lastRenderedWidgets = [];
@@ -115,27 +114,28 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Add a child at a given position with a widget. Returns the child ID.
   /// You need the child size for optimising the focus on child
-  CanvasChildId addChild(
-    Offset position,
-    Widget widget, {
-    bool focusOnInit = false,
-    Size? childSize,
-    CanvasChildId? id,
-  }) {
+  CanvasChildId addChild(Offset position, Widget widget, {Size? childSize, CanvasChildId? id}) {
+    final childId = _addChildInternal(position, widget, childSize: childSize, id: id);
+    markDirty();
+    return childId;
+  }
+
+  CanvasChildId _addChildInternal(Offset position, Widget widget, {Size? childSize, CanvasChildId? id}) {
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
-    if (focusOnInit) {
-      assert(
-        childSize != null,
-        'Child size must be provided when focusing on init (to know positions before any build). Else, you must call focusOnChild in a post frame callback.',
-      );
-      assert(_focusChildOnInit == null, 'Focus child on init is already set. Cannot set it again.');
-      _focusChildOnInit = id;
-    }
     _children[id] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
     _spatialHash.add(position.toPoint(), id); // add to spatial hash
-    markDirty();
     return id;
+  }
+
+  List<CanvasChildId> addChildren(List<CanvasChildArgs> children, {CanvasChildId? focusOnBuild}) {
+    final ids = <CanvasChildId>[];
+    for (final child in children) {
+      ids.add(_addChildInternal(child.position, child.widget, childSize: child.childSize, id: child.id));
+    }
+    _focusChildOnBuild = focusOnBuild;
+    markDirty();
+    return ids;
   }
 
   /// Remove a child by its ID.
@@ -223,10 +223,10 @@ class LazyCanvasController with ChangeNotifier {
   List<ChildInfo> widgetsWithScreenPositions({bool forceRebuild = false}) {
     if (!_init) return [];
 
-    if (_firstBuild && _focusChildOnInit != null) {
+    if (_focusChildOnBuild != null) {
       // if this is the first build, focus on the child if set
-      focusOnChild(_focusChildOnInit!, animate: false);
-      _firstBuild = false;
+      focusOnChild(_focusChildOnBuild!, animate: false);
+      _focusChildOnBuild = null;
     }
 
     if (!_renderCacheDirty && !forceRebuild) {

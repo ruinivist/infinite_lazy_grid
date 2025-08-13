@@ -29,3 +29,12 @@ typedef CanvasChildId = String;
 // listener callbacks
 typedef OnWidgetEnteredRender = void Function(CanvasChildId id);
 typedef OnWidgetExitedRender = void Function(CanvasChildId id);
+
+class CanvasChildArgs {
+  final Offset position;
+  final Widget widget;
+  final Size? childSize;
+  CanvasChildId? id;
+
+  CanvasChildArgs({required this.position, required this.widget, this.childSize, this.id});
+}
