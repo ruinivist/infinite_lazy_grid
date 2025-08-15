@@ -14,6 +14,8 @@ import 'package:uuid/uuid.dart';
 part 'debug.dart';
 part 'types.dart';
 
+final _kBuildCacheBuffer = Offset(50, 50); // buffer I always add to the input build cache extent
+
 /// Controller for [LazyCanvas]
 class LazyCanvasController with ChangeNotifier {
   final Uuid _uuid = Uuid();
@@ -21,7 +23,7 @@ class LazyCanvasController with ChangeNotifier {
   double _baseScale = 1, _scale = 1;
   late Size _canvasSize;
   final HashMap<CanvasChildId, _ChildInfo> _children = HashMap<CanvasChildId, _ChildInfo>(); // CanvasChildId for IDs
-  final Offset? _buildCacheExtent;
+  Offset? _buildCacheExtent;
   late Offset _buildExtent;
   final Size _hashCellSize;
   bool _init = false;
@@ -53,7 +55,7 @@ class LazyCanvasController with ChangeNotifier {
     this.onWidgetEnteredRender,
     this.onWidgetExitedRender,
   }) : _hashCellSize = hashCellSize,
-       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + Offset(50, 50) : null
+       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + _kBuildCacheBuffer : null
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
   {
@@ -97,6 +99,12 @@ class LazyCanvasController with ChangeNotifier {
 
   void setBuildContext(BuildContext context) {
     _context = context;
+  }
+
+  /// Applied on the next build
+  void setBuildCacheExtent(Offset extent) {
+    _buildCacheExtent = extent + _kBuildCacheBuffer;
+    _buildExtent = Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
   }
 
   // ==================== Utils ====================
@@ -229,6 +237,7 @@ class LazyCanvasController with ChangeNotifier {
       _focusChildOnBuild = null;
     }
 
+    // _renderCacheDirty depends on _markDirty + other stuff
     if (!_renderCacheDirty && !forceRebuild) {
       // if the render cache is not dirty, we can use the cached result
       return _lastRenderedWidgets;
