@@ -40,6 +40,8 @@ class DotGridBackground extends CanvasBackground {
   final double spacing; // grid spacing in logical pixels at scale = 1
   final Color dotColor;
   final Color backgroundColor;
+  // Allow choosing pan semantics: true => grid moves with content ("natural"), false => inverted
+  final bool naturalPan;
 
   // Static shader program cache shared across instances
   static ui.FragmentProgram? _program;
@@ -50,6 +52,7 @@ class DotGridBackground extends CanvasBackground {
     this.spacing = 50.0,
     this.dotColor = Colors.black12,
     this.backgroundColor = Colors.white,
+    this.naturalPan = true,
   }) : super();
 
   // Kick off async load once
@@ -91,20 +94,22 @@ class DotGridBackground extends CanvasBackground {
       return;
     }
 
-    // Device pixel ratio for converting logical -> physical pixels used by FlutterFragCoord
-    final dpr = RendererBinding.instance.renderView.configuration.devicePixelRatio;
-
-    // Compute uniforms in physical pixels
-    final scaledSpacingPx = (spacing * scale * dpr).abs();
-    final radiusPx = (size * scale * dpr).abs();
+    // Compute uniforms in logical pixels to match FlutterFragCoord and CPU path
+    final scaledSpacingPx = (spacing * scale).abs();
+    final radiusPx = (size * scale).abs();
 
     // Phase to align grid with world origin under pan/zoom
     double modPositive(double a, double m) => ((a % m) + m) % m;
-    final phaseXPx = modPositive(canvasOffset.dx * scale * dpr, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
-    final phaseYPx = modPositive(canvasOffset.dy * scale * dpr, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
+    final sign = naturalPan ? 1.0 : -1.0;
+    final phaseXPx = modPositive(sign * canvasOffset.dx * scale, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
+    final phaseYPx = modPositive(sign * canvasOffset.dy * scale, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
 
-    final originXPx = screenOffset.dx * dpr;
-    final originYPx = screenOffset.dy * dpr;
+    // Snap origin: use exact logical origin (no rounding) to match CPU path
+    final originXPx = screenOffset.dx;
+    final originYPx = screenOffset.dy;
+
+    // Precompute inverse spacing to avoid division in shader
+    final invScaledSpacing = scaledSpacingPx == 0 ? 0.0 : 1.0 / scaledSpacingPx;
 
     // Build fragment shader and set uniforms in declaration order
     final shader = program.fragmentShader();
@@ -119,14 +124,15 @@ class DotGridBackground extends CanvasBackground {
     }
 
     void set4c(Color c) {
-      shader.setFloat(i++, c.r);
-      shader.setFloat(i++, c.g);
-      shader.setFloat(i++, c.b);
-      shader.setFloat(i++, c.a);
+      shader.setFloat(i++, c.red / 255.0);
+      shader.setFloat(i++, c.green / 255.0);
+      shader.setFloat(i++, c.blue / 255.0);
+      shader.setFloat(i++, c.opacity);
     }
 
     set2(originXPx, originYPx);
     set1(scaledSpacingPx);
+    set1(invScaledSpacing);
     set2(phaseXPx, phaseYPx);
     set1(radiusPx);
     set4c(dotColor);
@@ -136,5 +142,78 @@ class DotGridBackground extends CanvasBackground {
 
     // Draw once with the shader
     canvas.drawRect(rect, paint);
+  }
+}
+
+class DotGridBackgroundCpu extends CanvasBackground {
+  final double size; // radius in logical pixels at scale = 1
+  final double spacing; // grid spacing in logical pixels at scale = 1
+  final Color dotColor;
+  final Color backgroundColor;
+  // true => grid tracks content ("natural"), false => inverted pan
+  final bool naturalPan;
+
+  const DotGridBackgroundCpu({
+    this.size = 2.0,
+    this.spacing = 50.0,
+    this.dotColor = Colors.black12,
+    this.backgroundColor = Colors.white,
+    this.naturalPan = true,
+  }) : super();
+
+  @override
+  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
+    // Fill background
+    final rect = Rect.fromLTWH(screenOffset.dx, screenOffset.dy, canvasSize.width, canvasSize.height);
+    final bgPaint = Paint()
+      ..color = backgroundColor
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(rect, bgPaint);
+
+    // Early out if dots are too dense or too small
+    final spacingSS = (spacing * scale).abs();
+    final radiusSS = (size * scale).abs();
+    if (spacingSS < 1.0 || radiusSS < 0.25) {
+      return; // background already drawn
+    }
+
+    final dotPaint = Paint()
+      ..color = dotColor
+      ..style = PaintingStyle.fill;
+
+    // Choose pan semantics
+    final sign = naturalPan ? 1.0 : -1.0;
+
+    // Determine visible grid-space bounds to iterate
+    // Screen rect spans [screenOffset, screenOffset + canvasSize]
+    // xSS = screenOffset.x + (xGS - sign*canvasOffset.x) * scale
+    // Solve for xGS bounds to cover the screen rect (+radius margin)
+    final marginGSX = radiusSS / scale;
+    final marginGSY = radiusSS / scale;
+
+    final xGsMin = sign * canvasOffset.dx - marginGSX;
+    final xGsMax = sign * canvasOffset.dx + (canvasSize.width + 2 * radiusSS) / scale;
+    final yGsMin = sign * canvasOffset.dy - marginGSY;
+    final yGsMax = sign * canvasOffset.dy + (canvasSize.height + 2 * radiusSS) / scale;
+
+    int nStartX = (xGsMin / spacing).floor();
+    int nEndX = (xGsMax / spacing).ceil();
+    int nStartY = (yGsMin / spacing).floor();
+    int nEndY = (yGsMax / spacing).ceil();
+
+    // Iterate grid and draw circles
+    for (int nx = nStartX; nx <= nEndX; nx++) {
+      final xGS = nx * spacing;
+      final xSS = screenOffset.dx + (xGS - sign * canvasOffset.dx) * scale;
+      if (xSS + radiusSS < rect.left || xSS - radiusSS > rect.right) continue; // skip out-of-bounds columns
+
+      for (int ny = nStartY; ny <= nEndY; ny++) {
+        final yGS = ny * spacing;
+        final ySS = screenOffset.dy + (yGS - sign * canvasOffset.dy) * scale;
+        if (ySS + radiusSS < rect.top || ySS - radiusSS > rect.bottom) continue; // skip out-of-bounds rows
+
+        canvas.drawCircle(Offset(xSS, ySS), radiusSS, dotPaint);
+      }
+    }
   }
 }
