@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart'; // added for LogicalKeyboardKey
-import 'package:flutter/gestures.dart'; // added for PointerScrollEvent
+import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
+import 'package:flutter/gestures.dart'; // PointerScrollEvent
 import '../utils/offset_extensions.dart';
 
 import '../utils/styles.dart';
@@ -47,7 +47,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
       behavior: HitTestBehavior.translucent, // ensure scroll signals are captured even on empty space
       onPointerSignal: (event) {
         if (event is PointerScrollEvent) {
-          final pressed = RawKeyboard.instance.keysPressed;
+          final pressed = HardwareKeyboard.instance.logicalKeysPressed;
           if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
             // Typical mouse wheel up gives negative dy on many platforms; invert if needed
             final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
@@ -177,11 +177,11 @@ class _CanvasRenderBox extends RenderBox
   Function onChildSizeChange;
 
   _CanvasRenderBox({
-    required childrenIds,
-    required ssPositions,
-    required scale,
-    required gridSpaceOffset,
-    required canvasBackground,
+    required List<CanvasChildId> childrenIds,
+    required List<Offset> ssPositions,
+    required double scale,
+    required Offset gridSpaceOffset,
+    required CanvasBackground canvasBackground,
     required this.onCanvasSizeChange,
     required this.onChildSizeChange,
   }) : assert(childrenIds.length == ssPositions.length),
@@ -282,8 +282,8 @@ class _CanvasRenderBox extends RenderBox
 
       // Apply transformation using pushTransform for proper coordinate handling
       final transform = Matrix4.identity()
-        ..translate(drawAt.dx, drawAt.dy)
-        ..scale(childParentData.scale, childParentData.scale);
+        ..translateByDouble(drawAt.dx, drawAt.dy, 0.0, 1.0)
+        ..scaleByDouble(childParentData.scale, childParentData.scale, 1.0, 1.0);
 
       // Note: initially I was using context.canvas.translate and context.canvas.scale
       // but that doesn't work with say using a SingleChildScrollView inside a child
@@ -319,8 +319,8 @@ class _CanvasRenderBox extends RenderBox
       } else {
         // same paint transform for hit testing when scaled
         final Matrix4 transform = Matrix4.identity()
-          ..translate(childParentData.offset.dx, childParentData.offset.dy)
-          ..scale(childParentData.scale, childParentData.scale);
+          ..translateByDouble(childParentData.offset.dx, childParentData.offset.dy, 0.0, 1.0)
+          ..scaleByDouble(childParentData.scale, childParentData.scale, 1.0, 1.0);
 
         isHit = result.addWithPaintTransform(
           transform: transform,
