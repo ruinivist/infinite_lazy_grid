@@ -131,7 +131,11 @@ class LazyCanvasController with ChangeNotifier {
   CanvasChildId _addChildInternal(Offset position, Widget widget, {Size? childSize, CanvasChildId? id}) {
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
-    _children[id] = _ChildInfo(gsPosition: position, widget: widget, lastRenderedSize: childSize);
+    _children[id] = _ChildInfo(
+      gsPosition: position,
+      widget: Container(key: ValueKey<String>(id), child: widget),
+      lastRenderedSize: childSize,
+    );
     _spatialHash.add(position.toPoint(), id); // add to spatial hash
     return id;
   }
@@ -177,10 +181,7 @@ class LazyCanvasController with ChangeNotifier {
   /// Update a child's widget.
   void updateChildWidget(CanvasChildId id, Widget newWidget) {
     if (_children.containsKey(id)) {
-      final child = _children[id]!;
-      // Create a new _ChildInfo with the new widget
-      _children[id] = _ChildInfo(gsPosition: child.gsPosition, widget: newWidget)
-        ..lastRenderedSize = child.lastRenderedSize;
+      _children[id]!.widget = Container(key: ValueKey<String>(id), child: newWidget);
       markDirty();
     } else {
       throw _ChildNotFoundException;
@@ -271,7 +272,7 @@ class LazyCanvasController with ChangeNotifier {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.widget;
-      if (debug) child = _Debug(id: id, gs: item.gsPosition, ss: ssPosition, child: child);
+      if (debug) child = _Debug(key: ValueKey<String>(id), id: id, gs: item.gsPosition, ss: ssPosition, child: child);
       return ChildInfo(id: id, gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
     }).toList();
   }

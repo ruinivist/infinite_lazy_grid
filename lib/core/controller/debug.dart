@@ -5,7 +5,7 @@ class _Debug extends StatelessWidget {
   final Offset gs, ss;
   final Widget child;
 
-  const _Debug({required this.id, required this.gs, required this.ss, required this.child});
+  const _Debug({required this.id, required this.gs, required this.ss, required this.child, required super.key});
 
   @override
   Widget build(BuildContext context) {
