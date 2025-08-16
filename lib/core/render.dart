@@ -138,7 +138,9 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
       ..ssPositions = ssPositions
       ..canvasBackground = canvasBackground
       ..gridSpaceOffset = gridSpaceOffset
-      ..scale = scale;
+      ..scale = scale
+      ..onCanvasSizeChange = onCanvasSizeChange
+      ..onChildSizeChange = onChildSizeChange;
   }
 }
 
