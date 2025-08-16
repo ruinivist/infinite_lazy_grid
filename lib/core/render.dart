@@ -33,6 +33,14 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
   }
 
   @override
+  void didUpdateWidget(covariant LazyCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      widget.controller.setTickerProvider(this);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     widget.controller.setBuildContext(context);
     return Listener(
