@@ -64,7 +64,9 @@ class DotGridBackground extends CanvasBackground {
           _program = p;
           // Request a repaint when shader becomes available
           try {
-            RendererBinding.instance.renderView.markNeedsPaint();
+            for (final renderView in RendererBinding.instance.renderViews) {
+              renderView.markNeedsPaint();
+            }
           } catch (_) {}
         }).catchError((_) {
           // keep _program null; we'll fallback to CPU/simple paint
@@ -124,10 +126,10 @@ class DotGridBackground extends CanvasBackground {
     }
 
     void set4c(Color c) {
-      shader.setFloat(i++, c.red / 255.0);
-      shader.setFloat(i++, c.green / 255.0);
-      shader.setFloat(i++, c.blue / 255.0);
-      shader.setFloat(i++, c.opacity);
+      shader.setFloat(i++, c.r);
+      shader.setFloat(i++, c.g);
+      shader.setFloat(i++, c.b);
+      shader.setFloat(i++, c.a);
     }
 
     set2(originXPx, originYPx);
