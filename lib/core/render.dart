@@ -94,7 +94,7 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
                     left: 16,
                     child: Text(
                       'Offset: ${widget.controller.offset.coord()}\nScale: ${widget.controller.scale.toStringAsFixed(1)}',
-                      style: monospaceStyle,
+                      style: monospaceStyle(context),
                     ),
                   ),
                 ],
