@@ -56,7 +56,13 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
             }
           }
         }
+        // handle any other registered signal events
+        widget.controller.rawPointerSignalListener?.call(event);
       },
+      onPointerDown: widget.controller.rawPointerDownListener,
+      onPointerMove: widget.controller.rawPointerMoveListener,
+      onPointerUp: widget.controller.rawPointerUpListener,
+      onPointerCancel: widget.controller.rawPointerCancelListener,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onScaleUpdate: widget.controller.onScaleUpdate,
@@ -298,14 +304,37 @@ class _CanvasRenderBox extends RenderBox
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     RenderBox? child = lastChild;
     while (child != null) {
-      // need to get a coordinate in child space
-      final childParentData = child.parentData as _CanvasWidgetParentData;
-      final Offset childSpacePosition =
-          (position - childParentData.offset /* <- distance in screen space */ ) / childParentData.scale;
-      // divide by scale so if screen space is 2x, it's only x in child space
-      if (child.hitTest(result, position: childSpacePosition)) {
+      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+
+      bool isHit;
+      if (childParentData.scale == 1.0) {
+        // Fast path: only translated, no scale
+        isHit = result.addWithPaintOffset(
+          offset: childParentData.offset,
+          position: position,
+          hitTest: (BoxHitTestResult result, Offset transformed) {
+            return child!.hitTest(result, position: transformed);
+          },
+        );
+      } else {
+        // same paint transform for hit testing when scaled
+        final Matrix4 transform = Matrix4.identity()
+          ..translate(childParentData.offset.dx, childParentData.offset.dy)
+          ..scale(childParentData.scale, childParentData.scale);
+
+        isHit = result.addWithPaintTransform(
+          transform: transform,
+          position: position,
+          hitTest: (BoxHitTestResult result, Offset transformed) {
+            return child!.hitTest(result, position: transformed);
+          },
+        );
+      }
+
+      if (isHit) {
         return true;
       }
+
       child = childParentData.previousSibling;
     }
     return false;

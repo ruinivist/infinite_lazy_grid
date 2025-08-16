@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:infinite_lazy_grid/core/background.dart';
 import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
@@ -41,6 +42,11 @@ class LazyCanvasController with ChangeNotifier {
   OnWidgetEnteredRender? onWidgetEnteredRender;
   OnWidgetExitedRender? onWidgetExitedRender;
   Set<CanvasChildId> _renderedWidgets = {}; // to track which widgets are currently rendered
+  PointerDownEventListener? rawPointerDownListener;
+  PointerMoveEventListener? rawPointerMoveListener;
+  PointerUpEventListener? rawPointerUpListener;
+  PointerCancelEventListener? rawPointerCancelListener;
+  PointerSignalEventListener? rawPointerSignalListener;
 
   bool debug;
   final Duration defaultAnimationDuration;
@@ -54,6 +60,11 @@ class LazyCanvasController with ChangeNotifier {
     this.useIdsFromArgs = false,
     this.onWidgetEnteredRender,
     this.onWidgetExitedRender,
+    this.rawPointerSignalListener,
+    this.rawPointerDownListener,
+    this.rawPointerMoveListener,
+    this.rawPointerUpListener,
+    this.rawPointerCancelListener,
   }) : _hashCellSize = hashCellSize,
        _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + _kBuildCacheBuffer : null
   // only top left is considered so if a widget has long width, it'll not be rendered
