@@ -115,7 +115,9 @@ class LazyCanvasController with ChangeNotifier {
   /// Applied on the next build
   void setBuildCacheExtent(Offset extent) {
     _buildCacheExtent = extent + _kBuildCacheBuffer;
-    _buildExtent = Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
+    if (_init) {
+      _buildExtent = Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
+    }
   }
 
   // ==================== Utils ====================
