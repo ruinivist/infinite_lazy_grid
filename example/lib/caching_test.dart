@@ -10,7 +10,7 @@ class CachingTestApp extends StatefulWidget {
 }
 
 class _CachingTestAppState extends State<CachingTestApp> {
-  final LazyCanvasController controller = LazyCanvasController(debug: false);
+  final LazyCanvasController controller = LazyCanvasController(debug: false, buildCacheExtent: const Offset(50, 50));
 
   @override
   void initState() {
@@ -34,7 +34,7 @@ class _CachingTestAppState extends State<CachingTestApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Widget Caching Test'),
+        title: const Text('Widget Build Counts'),
         actions: [
           IconButton(
             onPressed: () {
@@ -51,23 +51,7 @@ class _CachingTestAppState extends State<CachingTestApp> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.yellow[100],
-            child: const Text(
-              'Instructions:\n'
-              '• Pan around the canvas - widgets should only build once initially\n'
-              '• Watch the console for build messages\n'
-              '• Use the refresh button to force rebuilds\n'
-              '• Zoom in/out to see caching in action',
-              style: TextStyle(fontSize: 12),
-            ),
-          ),
-          Expanded(child: LazyCanvas(controller: controller)),
-        ],
-      ),
+      body: LazyCanvas(controller: controller),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

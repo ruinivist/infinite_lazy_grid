@@ -8,9 +8,10 @@ void main() {
   runApp(
     MaterialApp(
       // showPerformanceOverlay: true,
-      title: 'Infinite Lazy 2D Grid Example',
+      title: 'Infinite Lazy 2D Grid Examples',
       home: const ExampleChooser(),
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Color(0xffffbf69))),
     ),
   );
 }
@@ -37,14 +38,14 @@ class ExampleChooser extends StatelessWidget {
               onPressed: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const CachingTestApp()));
               },
-              child: const Text('Widget Caching Test'),
+              child: const Text('Widget Build Counts'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const DynamicWidgetExample()));
               },
-              child: const Text('Dynamic Widget Inputs'),
+              child: const Text('Widget State Updates'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -59,7 +60,7 @@ class ExampleChooser extends StatelessWidget {
               child: Text(
                 'Examples:\n'
                 '• Simple: Basic usage demo\n'
-                '• Caching Test: To sanity check build counts\n'
+                '• Build Counts: To see what rebuilds when\n'
                 '• Dynamic Inputs: How to handle changing widget data\n'
                 '• Render Callbacks: See widgets enter/exit render area',
                 textAlign: TextAlign.center,

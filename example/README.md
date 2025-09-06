@@ -1,16 +1,8 @@
-# example
+# Demos
 
-A new Flutter project.
+Contains 4 small focused demos.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+-   `Simple Example` – minimal setup, add nodes, pan, zoom, focus.
+-   `Build Counts Example` – shows build / culling behavior; watch console for build counts.
+-   `Widget State Updates Example` – three patterns for dynamic / reactive child content.
+-   `Render Callbacks Example` – logs enter / exit render area callbacks and overlays debug info.

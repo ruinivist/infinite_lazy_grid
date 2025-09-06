@@ -11,7 +11,7 @@ class SimpleExample extends StatefulWidget {
 }
 
 class _SimpleExampleState extends State<SimpleExample> {
-  final LazyCanvasController controller = LazyCanvasController(debug: true);
+  final LazyCanvasController controller = LazyCanvasController(debug: true, buildCacheExtent: const Offset(50, 50));
   final List<CanvasChildId> childIds = [];
 
   @override
