@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
@@ -46,13 +47,22 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
     return Listener(
       behavior: HitTestBehavior.translucent, // ensure scroll signals are captured even on empty space
       onPointerSignal: (event) {
-        if (event is PointerScrollEvent) {
-          final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-          if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
-            // Typical mouse wheel up gives negative dy on many platforms; invert if needed
-            final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
-            if (delta != 0) {
-              widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+        // on web these are pointer scale events
+        if (kIsWeb) {
+          if (event is PointerScaleEvent) {
+            final delta = (event.scale - 1) * 0.25; // sensitivity
+            widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+          }
+        } else {
+          // other desktop mouse wheel is scroll event
+          if (event is PointerScrollEvent) {
+            final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+            if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
+              // Typical mouse wheel up gives negative dy on many platforms; invert if needed
+              final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
+              if (delta != 0) {
+                widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+              }
             }
           }
         }

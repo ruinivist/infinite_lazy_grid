@@ -29,3 +29,6 @@ migrate_working_dir/
 .flutter-plugins
 .flutter-plugins-dependencies
 build/
+
+# local readme stuff
+LOCAL_README.md
