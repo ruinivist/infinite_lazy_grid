@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui show FragmentProgram; // for runtime shader
-import 'package:flutter/rendering.dart' show RendererBinding; // to mark repaint after async load
+import 'package:flutter/rendering.dart'
+    show RendererBinding; // to mark repaint after async load
 
 /// Abstract definition for a [LazyCanvas] background.
 abstract class CanvasBackground {
@@ -12,26 +13,53 @@ abstract class CanvasBackground {
   /// different kinds of backgrounds
   /// [screenOffset] is the screen space offset for clipping
   /// [canvasOffset] is the grid space offset from the controller
-  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize);
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  );
 }
 
 class NoBackground extends CanvasBackground {
   const NoBackground();
 
   @override
-  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {}
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  ) {}
 }
 
-class SingleColorBackround extends CanvasBackground {
-  const SingleColorBackround(Color backgroundColor) : super(bgColor: backgroundColor);
+class SingleColorBackground extends CanvasBackground {
+  const SingleColorBackground(Color backgroundColor)
+    : super(bgColor: backgroundColor);
 
   @override
-  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  ) {
     final paint = Paint()
       ..color = bgColor
       ..style = PaintingStyle.fill;
 
-    canvas.drawRect(Rect.fromLTWH(screenOffset.dx, screenOffset.dy, canvasSize.width, canvasSize.height), paint);
+    canvas.drawRect(
+      Rect.fromLTWH(
+        screenOffset.dx,
+        screenOffset.dy,
+        canvasSize.width,
+        canvasSize.height,
+      ),
+      paint,
+    );
   }
 }
 
@@ -59,18 +87,21 @@ class DotGridBackground extends CanvasBackground {
   static void _ensureProgramLoaded() {
     if (_program != null || _programFuture != null) return;
     try {
-      _programFuture = ui.FragmentProgram.fromAsset('packages/infinite_lazy_grid/shaders/dot_grid.frag')
-        ..then((p) {
-          _program = p;
-          // Request a repaint when shader becomes available
-          try {
-            for (final renderView in RendererBinding.instance.renderViews) {
-              renderView.markNeedsPaint();
-            }
-          } catch (_) {}
-        }).catchError((_) {
-          // keep _program null; we'll fallback to CPU/simple paint
-        });
+      _programFuture =
+          ui.FragmentProgram.fromAsset(
+              'packages/infinite_lazy_grid/shaders/dot_grid.frag',
+            )
+            ..then((p) {
+              _program = p;
+              // Request a repaint when shader becomes available
+              try {
+                for (final renderView in RendererBinding.instance.renderViews) {
+                  renderView.markNeedsPaint();
+                }
+              } catch (_) {}
+            }).catchError((_) {
+              // keep _program null; we'll fallback to CPU/simple paint
+            });
     } catch (_) {
       // fromAsset may throw synchronously on unsupported platforms
       _programFuture = null;
@@ -79,12 +110,23 @@ class DotGridBackground extends CanvasBackground {
   }
 
   @override
-  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  ) {
     // Always draw background fill (also serves as fallback while shader loads)
     final bgPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
-    final rect = Rect.fromLTWH(screenOffset.dx, screenOffset.dy, canvasSize.width, canvasSize.height);
+    final rect = Rect.fromLTWH(
+      screenOffset.dx,
+      screenOffset.dy,
+      canvasSize.width,
+      canvasSize.height,
+    );
 
     // Ensure shader load started
     _ensureProgramLoaded();
@@ -103,8 +145,14 @@ class DotGridBackground extends CanvasBackground {
     // Phase to align grid with world origin under pan/zoom
     double modPositive(double a, double m) => ((a % m) + m) % m;
     final sign = naturalPan ? 1.0 : -1.0;
-    final phaseXPx = modPositive(sign * canvasOffset.dx * scale, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
-    final phaseYPx = modPositive(sign * canvasOffset.dy * scale, scaledSpacingPx == 0 ? 1 : scaledSpacingPx);
+    final phaseXPx = modPositive(
+      sign * canvasOffset.dx * scale,
+      scaledSpacingPx == 0 ? 1 : scaledSpacingPx,
+    );
+    final phaseYPx = modPositive(
+      sign * canvasOffset.dy * scale,
+      scaledSpacingPx == 0 ? 1 : scaledSpacingPx,
+    );
 
     // Snap origin: use exact logical origin (no rounding) to match CPU path
     final originXPx = screenOffset.dx;
@@ -164,9 +212,20 @@ class DotGridBackgroundCpu extends CanvasBackground {
   }) : super();
 
   @override
-  void paint(Canvas canvas, Offset screenOffset, Offset canvasOffset, double scale, Size canvasSize) {
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  ) {
     // Fill background
-    final rect = Rect.fromLTWH(screenOffset.dx, screenOffset.dy, canvasSize.width, canvasSize.height);
+    final rect = Rect.fromLTWH(
+      screenOffset.dx,
+      screenOffset.dy,
+      canvasSize.width,
+      canvasSize.height,
+    );
     final bgPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
@@ -194,9 +253,11 @@ class DotGridBackgroundCpu extends CanvasBackground {
     final marginGSY = radiusSS / scale;
 
     final xGsMin = sign * canvasOffset.dx - marginGSX;
-    final xGsMax = sign * canvasOffset.dx + (canvasSize.width + 2 * radiusSS) / scale;
+    final xGsMax =
+        sign * canvasOffset.dx + (canvasSize.width + 2 * radiusSS) / scale;
     final yGsMin = sign * canvasOffset.dy - marginGSY;
-    final yGsMax = sign * canvasOffset.dy + (canvasSize.height + 2 * radiusSS) / scale;
+    final yGsMax =
+        sign * canvasOffset.dy + (canvasSize.height + 2 * radiusSS) / scale;
 
     int nStartX = (xGsMin / spacing).floor();
     int nEndX = (xGsMax / spacing).ceil();
@@ -207,12 +268,14 @@ class DotGridBackgroundCpu extends CanvasBackground {
     for (int nx = nStartX; nx <= nEndX; nx++) {
       final xGS = nx * spacing;
       final xSS = screenOffset.dx + (xGS - sign * canvasOffset.dx) * scale;
-      if (xSS + radiusSS < rect.left || xSS - radiusSS > rect.right) continue; // skip out-of-bounds columns
+      if (xSS + radiusSS < rect.left || xSS - radiusSS > rect.right)
+        continue; // skip out-of-bounds columns
 
       for (int ny = nStartY; ny <= nEndY; ny++) {
         final yGS = ny * spacing;
         final ySS = screenOffset.dy + (yGS - sign * canvasOffset.dy) * scale;
-        if (ySS + radiusSS < rect.top || ySS - radiusSS > rect.bottom) continue; // skip out-of-bounds rows
+        if (ySS + radiusSS < rect.top || ySS - radiusSS > rect.bottom)
+          continue; // skip out-of-bounds rows
 
         canvas.drawCircle(Offset(xSS, ySS), radiusSS, dotPaint);
       }
