@@ -10,7 +10,7 @@ class DynamicWidgetExample extends StatefulWidget {
 }
 
 class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
-  final LazyCanvasController controller = LazyCanvasController(debug: false);
+  final LazyCanvasController controller = LazyCanvasController(debug: false, buildCacheExtent: const Offset(50, 50));
 
   // Store child IDs for later reference
   late CanvasChildId selfManagedId;
@@ -93,16 +93,16 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Dynamic Widget Inputs')),
+      appBar: AppBar(title: const Text('Widget State Updates')),
       body: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surfaceContainerLowest,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Three approaches for dynamic inputs:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Three approaches for state updates:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Text('1. Self-managed StatefulWidget (left), loses state on unmount'),
                 const Text('2. External data + updateChildWidget (center) - manual updates'),
@@ -189,8 +189,6 @@ class ExternalDataWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('ExternalDataWidget built with counter: $counter, key: $key');
-
     return Container(
       width: 120,
       height: 80,
