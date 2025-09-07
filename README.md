@@ -1,39 +1,134 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# infinite_lazy_grid
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Infinite zoomable, pannable 2D canvas using spatial hash for only rendering what's visible.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+## Quick Start
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+```dart
+import 'package:flutter/material.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
-## Features
+class DemoCanvas extends StatefulWidget {
+  const DemoCanvas({super.key});
+  @override
+  State<DemoCanvas> createState() => _DemoCanvasState();
+}
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+class _DemoCanvasState extends State<DemoCanvas> {
+  // all interactions go through the controller
+  final controller = LazyCanvasController(
+    background: const DotGridBackground(),
+    debug: true // wrapps each child with debug info visible on screen (positions, id)
+  );
 
-## Getting started
+  @override
+  void initState() {
+    super.initState();
+    // Add some sample nodes in a grid
+    for (int i = 0; i < 50; i++) {
+      controller.addChild(
+        Offset((i % 10) * 140.0, (i ~/ 10) * 140.0),
+      );
+    }
+  }
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+  @override
+  Widget build(BuildContext ctx) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('infinite_lazy_grid')),
+      // pass the controller to the LazyCanvas widget
+      body: LazyCanvas(controller: controller),
+    );
+  }
+}
+```
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+### Adding/Removing children
 
 ```dart
-const like = 'sample';
+// one child, returns its id which is just a uuid string
+CanvasChildId oneChild = controller.addChild(
+  const Offset(500, 1200),
+);
+
+// with custom widget
+List<CanvasChildId> batchAdd = controller.addChildren([
+  CanvasChildArgs(position: const Offset(0, 0), widget: const Text('Origin')),
+  CanvasChildArgs(position: const Offset(800, 200), widget: const Icon(Icons.star)),
+]);
+
+// remove one by Id
+controller.removeChild(oneChild);
+
+// remove all
+controller.clear();
 ```
 
-## Additional information
+### Focus / center
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+All of these animate by default (`duration` optional, `animate: false` to jump).
+
+```dart
+// child specific
+controller.focusOnChild(id);                                   // keep scale
+controller.focusOnChild(id, scalingMode: ScalingMode.resetScale);
+controller.focusOnChild(id, scalingMode: ScalingMode.fitInViewport, preferredHorizontalMargin: 16);
+
+// absolute position in grid space
+controller.centerOnGridOffset(const Offset(0, 0));
+
+// absolute position in screen space
+controller.centerOnScreenOffset(const Offset(200, 150));
+```
+
+### Zoom & animate
+
+```dart
+controller.updateScalebyDelta(0.2);      // zoom in
+controller.updateScalebyDelta(-0.2);     // zoom out
+// animate to position on grid
+await controller.animateToOffsetAndScale(
+  offset: const Offset(1200, 300),
+  scale: 2.0,
+  duration: const Duration(milliseconds: 400),
+);
+```
+
+### Background options
+
+```dart
+background: const NoBackground();
+background: const SingleColorBackround(Colors.white);
+background: const DotGridBackground(spacing: 60, size: 2.0);
+```
+
+All of these implement abstract class `CanvasBackground` so you can add your own.
+
+### Render callbacks
+
+```dart
+LazyCanvasController(
+  onWidgetEnteredRender: (id) { /* do something */ },
+  onWidgetExitedRender: (id) { /* do something else */ },
+);
+```
+
+### Widet updates
+
+Since the args aren't directly available for you to place in the build tree. Child rebuilds can be handled in three ways:
+
+1. _Stateful widget child_: Child handles it's own updates but state is lost when unmounted.
+2. _Manual update_: `updateChildWidget(id, newWidget)`.
+3. _Child listens to external state_: Some `Listenable` or some state management library like `Provider` etc that rebuild child when data changes.
+
+### Size based optimisations
+
+`focusOnChild` auto measures offstage if size unknown. Provide `childSize` if you already know it to skip the extra pass.
+
+This extra pass is cached so would only happen once per child if size not provided.
+
+## Example
+
+See `example/` directory (Simple Example, Build Counts Example, Widget State Updates Example, Render Callbacks Example).
