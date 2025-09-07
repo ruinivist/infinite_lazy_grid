@@ -28,12 +28,6 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
   }
 
   @override
-  void dispose() {
-    widget.controller.dispose(); // for the change notifier
-    super.dispose();
-  }
-
-  @override
   void didUpdateWidget(covariant LazyCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {

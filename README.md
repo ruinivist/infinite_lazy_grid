@@ -2,6 +2,12 @@
 
 Infinite zoomable, pannable 2D canvas using spatial hash for only rendering what's visible.
 
+Example: https://infinite-lazy-grid.pages.dev/
+
+<p align='center'>
+    <img loading="lazy" src="https://raw.githubusercontent.com/ruinivist/infinite_lazy_grid/main/demo.gif" />
+</p>
+
 ## Quick Start
 
 ```dart
@@ -18,7 +24,7 @@ class _DemoCanvasState extends State<DemoCanvas> {
   // all interactions go through the controller
   final controller = LazyCanvasController(
     background: const DotGridBackground(),
-    debug: true // wrapps each child with debug info visible on screen (positions, id)
+    debug: true, // wraps each child with debug info visible on screen (positions, id)
   );
 
   @override
@@ -28,6 +34,13 @@ class _DemoCanvasState extends State<DemoCanvas> {
     for (int i = 0; i < 50; i++) {
       controller.addChild(
         Offset((i % 10) * 140.0, (i ~/ 10) * 140.0),
+        Container(
+          width: 100,
+          height: 100,
+          color: Colors.primaries[i % Colors.primaries.length],
+          alignment: Alignment.center,
+          child: Text('${i + 1}', style: const TextStyle(color: Colors.white)),
+        ),
       );
     }
   }
@@ -51,6 +64,7 @@ class _DemoCanvasState extends State<DemoCanvas> {
 // one child, returns its id which is just a uuid string
 CanvasChildId oneChild = controller.addChild(
   const Offset(500, 1200),
+  const Icon(Icons.place, size: 32),
 );
 
 // with custom widget
@@ -115,13 +129,13 @@ LazyCanvasController(
 );
 ```
 
-### Widet updates
+### Widget updates
 
-Since the args aren't directly available for you to place in the build tree. Child rebuilds can be handled in three ways:
+Since the args aren't directly available for you to place in the build tree, child rebuilds can be handled in three ways:
 
-1. _Stateful widget child_: Child handles it's own updates but state is lost when unmounted.
-2. _Manual update_: `updateChildWidget(id, newWidget)`.
-3. _Child listens to external state_: Some `Listenable` or some state management library like `Provider` etc that rebuild child when data changes.
+1. Stateful widget child: Child handles its own updates but state is lost when unmounted.
+2. Manual update: `updateChildWidget(id, newWidget)`.
+3. Child listens to external state: Some `Listenable` or a state management library like Provider, etc., that rebuilds the child when data changes.
 
 ### Size based optimisations
 
