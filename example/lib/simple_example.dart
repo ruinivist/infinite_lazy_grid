@@ -11,11 +11,14 @@ class SimpleExample extends StatefulWidget {
 }
 
 class _SimpleExampleState extends State<SimpleExample> {
-  final LazyCanvasController controller = LazyCanvasController(debug: true, buildCacheExtent: const Offset(50, 50));
-  final List<CanvasChildId> childIds = [];
+  late final LazyCanvasController controller;
 
   @override
   void initState() {
+    final cacheExtent = const Offset(50, 50);
+    controller = LazyCanvasController(debug: true, buildCacheExtent: cacheExtent);
+    final List<CanvasChildId> childIds = [];
+
     super.initState();
     for (int i = 0; i < 10; i++) {
       final id = controller.addChild(
@@ -30,7 +33,8 @@ class _SimpleExampleState extends State<SimpleExample> {
       );
       childIds.add(id);
     }
-    controller.addChild(
+
+    final trackId = controller.addChild(
       const Offset(0, 200),
       Container(
         width: 300,
@@ -52,6 +56,8 @@ class _SimpleExampleState extends State<SimpleExample> {
         ),
       ),
     );
+
+    controller.addChild(const Offset(330, 200), _PositionTracker(controller: controller, childId: trackId));
   }
 
   @override
@@ -95,5 +101,96 @@ class InfoContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(color: color, width: 50, height: 50);
+  }
+}
+
+class _PositionTracker extends StatefulWidget {
+  final LazyCanvasController controller;
+  final CanvasChildId childId;
+  const _PositionTracker({required this.controller, required this.childId});
+
+  @override
+  State<_PositionTracker> createState() => _PositionTrackerState();
+}
+
+class _PositionTrackerState extends State<_PositionTracker> {
+  late final VoidCallback _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _listener = () {
+      if (mounted) setState(() {});
+    };
+    widget.controller.addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final childPosition = widget.controller
+        .widgetsWithScreenPositions()
+        .where((e) => e.id == widget.childId)
+        .firstOrNull;
+
+    final visible = childPosition != null;
+    final borderColor = visible ? Colors.green : Colors.red;
+    final icon = visible ? Icons.visibility : Icons.visibility_off;
+    final statusText = visible ? 'Visible' : 'Off screen';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(left: BorderSide(color: borderColor, width: 4)),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This example uses tight build extents so you can see the text box get unmounted when its position ( top left ) goes off screen.\nIncrease it in your app.',
+            style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: borderColor),
+              const SizedBox(width: 6),
+              Text(
+                statusText,
+                style: TextStyle(color: borderColor, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cache extent: ${widget.controller.buildCacheExtent}',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          if (visible)
+            Text(
+              'Text box position: ${childPosition.ssPosition}',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
+            )
+          else
+            const Text('Text box is off screen', style: TextStyle(fontSize: 13)),
+          const SizedBox(height: 16),
+          Text(
+            'Note: due to spatial hashing the offset is an approximate, not a pixel-perfect measure.',
+            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withAlpha(200)),
+          ),
+        ],
+      ),
+    );
   }
 }

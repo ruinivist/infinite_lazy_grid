@@ -80,6 +80,8 @@ class LazyCanvasController with ChangeNotifier {
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
   bool get _renderCacheDirty => _lastProcessedOffset != _gsTopLeftOffset || _lastProcessedScale != _scale || _markDirty;
+  Offset get buildExtent => _buildExtent;
+  Offset? get buildCacheExtent => _buildCacheExtent;
 
   // ==================== Callback Functions ====================
 
