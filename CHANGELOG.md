@@ -13,3 +13,7 @@
 ## 1.0.3
 
 -   Update example
+
+## 1.0.4
+
+-   Add `hasChild` method to controller

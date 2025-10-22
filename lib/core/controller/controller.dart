@@ -241,6 +241,11 @@ class LazyCanvasController with ChangeNotifier {
     markDirty();
   }
 
+  /// Returns true if the child exists, false otherwise.
+  bool hasChild(CanvasChildId id) {
+    return _children.containsKey(id);
+  }
+
   // ==================== Positioning Logic ====================
 
   /// Currently rendered widgets with their position info
