@@ -7,13 +7,7 @@ class TestChild extends StatelessWidget {
   const TestChild({required this.index, super.key});
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      child: SizedBox(
-        key: ValueKey('test_child_$index'),
-        width: 50,
-        height: 50,
-      ),
-    );
+    return SizedBox(key: ValueKey('test_child_$index'), width: 50, height: 50);
   }
 }
 

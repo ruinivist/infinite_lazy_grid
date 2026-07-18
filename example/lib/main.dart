@@ -21,6 +21,10 @@ void main() {
 class ExampleChooser extends StatelessWidget {
   const ExampleChooser({super.key});
 
+  void _open(BuildContext context, Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,50 +34,22 @@ class ExampleChooser extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SimpleExample(),
-                  ),
-                );
-              },
+              onPressed: () => _open(context, const SimpleExample()),
               child: const Text('Simple Example'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CachingTestApp(),
-                  ),
-                );
-              },
+              onPressed: () => _open(context, const CachingTestApp()),
               child: const Text('Widget Build Counts'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DynamicWidgetExample(),
-                  ),
-                );
-              },
+              onPressed: () => _open(context, const DynamicWidgetExample()),
               child: const Text('Widget State Updates'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RenderCallbacksExample(),
-                  ),
-                );
-              },
+              onPressed: () => _open(context, const RenderCallbacksExample()),
               child: const Text('Render Callbacks Demo'),
             ),
             const SizedBox(height: 32),

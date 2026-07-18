@@ -115,9 +115,8 @@ class _LazyCanvasState extends State<LazyCanvas>
                   ),
                 ],
               );
-            } else {
-              return canvas;
             }
+            return canvas;
           },
         ),
       ),

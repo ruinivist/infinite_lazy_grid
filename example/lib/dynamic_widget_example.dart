@@ -84,12 +84,9 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
       selectedColor = Colors.primaries[counter % Colors.primaries.length];
     });
 
-    // Approach 2: Update the widget when external data changes
-    // Use ValueKey to ensure Flutter recognizes this as a different widget
     controller.updateChildWidget(
-      externalDataId, // Use the stored widget ID
+      externalDataId,
       ExternalDataWidget(
-        // key: ValueKey('external_$counter'), // Force rebuild with unique key
         counter: counter,
         message: message,
         color: selectedColor,
