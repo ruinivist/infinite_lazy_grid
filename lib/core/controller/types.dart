@@ -4,14 +4,20 @@ part of 'controller.dart';
 
 // some simple exceptions
 // ignore: non_constant_identifier_names
-final _ChildNotFoundException = Exception('Child with the given ID does not exist');
+final _ChildNotFoundException = Exception(
+  'Child with the given ID does not exist',
+);
 
 class _ChildInfo {
   Offset gsPosition;
   Size? lastRenderedSize;
   Widget widget;
 
-  _ChildInfo({required this.gsPosition, required this.widget, this.lastRenderedSize});
+  _ChildInfo({
+    required this.gsPosition,
+    required this.widget,
+    this.lastRenderedSize,
+  });
 }
 
 class ChildInfo {
@@ -19,7 +25,12 @@ class ChildInfo {
   Offset gsPosition;
   Offset ssPosition;
   Widget child;
-  ChildInfo({required this.id, required this.gsPosition, required this.ssPosition, required this.child});
+  ChildInfo({
+    required this.id,
+    required this.gsPosition,
+    required this.ssPosition,
+    required this.child,
+  });
 }
 
 enum ScalingMode { resetScale, keepScale, fitInViewport }
@@ -36,5 +47,10 @@ class CanvasChildArgs {
   final Size? childSize;
   CanvasChildId? id;
 
-  CanvasChildArgs({required this.position, required this.widget, this.childSize, this.id});
+  CanvasChildArgs({
+    required this.position,
+    required this.widget,
+    this.childSize,
+    this.id,
+  });
 }

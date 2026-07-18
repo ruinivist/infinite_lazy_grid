@@ -10,7 +10,12 @@ Offset ssToGs(Offset ssPosition, Offset gsTopLeft, double scale) {
   return ssPosition / scale + gsTopLeft;
 }
 
-Offset newGsTopLeftOnScaling(Offset gsTopLeft, Offset ssFocalPoint, double oldScale, double newScale) {
+Offset newGsTopLeftOnScaling(
+  Offset gsTopLeft,
+  Offset ssFocalPoint,
+  double oldScale,
+  double newScale,
+) {
   // gsFocal remains same
   // we change gsTopLeft to keep ssFocalPoint same as well
   Offset gsFocalPoint = ssToGs(ssFocalPoint, gsTopLeft, oldScale);

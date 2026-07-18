@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
 import 'package:flutter/gestures.dart'; // PointerScrollEvent
-import '../utils/offset_extensions.dart';
-
 import '../utils/styles.dart';
 import 'background.dart';
 import 'controller/controller.dart';
@@ -20,7 +18,8 @@ class LazyCanvas extends StatefulWidget {
   State<LazyCanvas> createState() => _LazyCanvasState();
 }
 
-class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<LazyCanvas> {
+class _LazyCanvasState extends State<LazyCanvas>
+    with TickerProviderStateMixin<LazyCanvas> {
   @override
   void initState() {
     super.initState();
@@ -39,23 +38,31 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
   Widget build(BuildContext context) {
     widget.controller.setBuildContext(context);
     return Listener(
-      behavior: HitTestBehavior.translucent, // ensure scroll signals are captured even on empty space
+      behavior: HitTestBehavior
+          .translucent, // ensure scroll signals are captured even on empty space
       onPointerSignal: (event) {
         // on web these are pointer scale events
         if (kIsWeb) {
           if (event is PointerScaleEvent) {
             final delta = (event.scale - 1) * 0.25; // sensitivity
-            widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+            widget.controller.updateScalebyDelta(
+              delta,
+              focalPoint: event.localPosition,
+            );
           }
         } else {
           // other desktop mouse wheel is scroll event
           if (event is PointerScrollEvent) {
             final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-            if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
+            if (pressed.contains(LogicalKeyboardKey.controlLeft) ||
+                pressed.contains(LogicalKeyboardKey.controlRight)) {
               // Typical mouse wheel up gives negative dy on many platforms; invert if needed
               final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
               if (delta != 0) {
-                widget.controller.updateScalebyDelta(delta, focalPoint: event.localPosition);
+                widget.controller.updateScalebyDelta(
+                  delta,
+                  focalPoint: event.localPosition,
+                );
               }
             }
           }
@@ -74,8 +81,11 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (_, _) {
-            final childrenWithPositions = widget.controller.widgetsWithScreenPositions();
-            final ssPositions = childrenWithPositions.map((e) => e.ssPosition).toList();
+            final childrenWithPositions = widget.controller
+                .widgetsWithScreenPositions();
+            final ssPositions = childrenWithPositions
+                .map((e) => e.ssPosition)
+                .toList();
             final childrenIds = childrenWithPositions.map((e) => e.id).toList();
             final children = childrenWithPositions.map((e) => e.child).toList();
             final canvas = _CanvasRenderObject(
@@ -97,7 +107,9 @@ class _LazyCanvasState extends State<LazyCanvas> with TickerProviderStateMixin<L
                     top: 16,
                     left: 16,
                     child: Text(
-                      'Offset: ${widget.controller.offset.coord()}\nScale: ${widget.controller.scale.toStringAsFixed(1)}',
+                      'Offset: (${widget.controller.offset.dx.toStringAsFixed(2)}, '
+                      '${widget.controller.offset.dy.toStringAsFixed(2)})\n'
+                      'Scale: ${widget.controller.scale.toStringAsFixed(1)}',
                       style: monospaceStyle(context),
                     ),
                   ),
@@ -133,7 +145,10 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
     required this.onCanvasSizeChange,
     required this.onChildSizeChange,
     required super.children, // children go to the MultiChildRenderObjectWidget
-  }) : assert(ssPositions.length == children.length, 'Children and positions must have the same length'),
+  }) : assert(
+         ssPositions.length == children.length,
+         'Children and positions must have the same length',
+       ),
        assert(scale != 0);
 
   @override
@@ -165,7 +180,6 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
 class _CanvasWidgetParentData extends ContainerBoxParentData<RenderBox> {
   // there is already an "offset" defined in BoxParentdata that is exactly what I want
   late CanvasChildId id;
-  late double scale; // scale is same for all rn but this makes it trivial to expand to children with diff scales
 }
 
 class _CanvasRenderBox extends RenderBox
@@ -249,10 +263,10 @@ class _CanvasRenderBox extends RenderBox
 
     int index = 0;
     while (child != null) {
-      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+      final _CanvasWidgetParentData childParentData =
+          child.parentData! as _CanvasWidgetParentData;
       childParentData.offset = _ssPositions[index];
       childParentData.id = _childrenIds[index];
-      childParentData.scale = _scale;
       index++;
       child.layout(constraints.loosen(), parentUsesSize: true);
 
@@ -272,7 +286,13 @@ class _CanvasRenderBox extends RenderBox
     context.canvas.clipRect(canvasStartOffset & size);
 
     // use the canvas background painter, pass it the canvas and that should handle drawing the background
-    _canvasBackground.paint(context.canvas, canvasStartOffset, _gridSpaceOffset, _scale, size);
+    _canvasBackground.paint(
+      context.canvas,
+      canvasStartOffset,
+      _gridSpaceOffset,
+      _scale,
+      size,
+    );
 
     // though using ssPositionns here directly worked for me but docs using the parentData
     // to get this info is the convention as child can be reordered ( though this will always
@@ -280,21 +300,25 @@ class _CanvasRenderBox extends RenderBox
     // on most other stuff ( single source of truth for paint & hit test etc )
     RenderBox? child = firstChild;
     while (child != null) {
-      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+      final _CanvasWidgetParentData childParentData =
+          child.parentData! as _CanvasWidgetParentData;
 
       final drawAt = canvasStartOffset + childParentData.offset;
 
       // Apply transformation using pushTransform for proper coordinate handling
       final transform = Matrix4.identity()
         ..translateByDouble(drawAt.dx, drawAt.dy, 0.0, 1.0)
-        ..scaleByDouble(childParentData.scale, childParentData.scale, 1.0, 1.0);
+        ..scaleByDouble(_scale, _scale, 1.0, 1.0);
 
       // Note: initially I was using context.canvas.translate and context.canvas.scale
       // but that doesn't work with say using a SingleChildScrollView inside a child
       // so using pushTransform is the way to go here
 
       // 0 offset since transform will take care of it
-      context.pushTransform(needsCompositing, Offset.zero, transform, (context, offset) {
+      context.pushTransform(needsCompositing, Offset.zero, transform, (
+        context,
+        offset,
+      ) {
         context.paintChild(child!, Offset.zero);
       });
 
@@ -308,10 +332,11 @@ class _CanvasRenderBox extends RenderBox
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     RenderBox? child = lastChild;
     while (child != null) {
-      final _CanvasWidgetParentData childParentData = child.parentData! as _CanvasWidgetParentData;
+      final _CanvasWidgetParentData childParentData =
+          child.parentData! as _CanvasWidgetParentData;
 
       bool isHit;
-      if (childParentData.scale == 1.0) {
+      if (_scale == 1.0) {
         // Fast path: only translated, no scale
         isHit = result.addWithPaintOffset(
           offset: childParentData.offset,
@@ -323,8 +348,13 @@ class _CanvasRenderBox extends RenderBox
       } else {
         // same paint transform for hit testing when scaled
         final Matrix4 transform = Matrix4.identity()
-          ..translateByDouble(childParentData.offset.dx, childParentData.offset.dy, 0.0, 1.0)
-          ..scaleByDouble(childParentData.scale, childParentData.scale, 1.0, 1.0);
+          ..translateByDouble(
+            childParentData.offset.dx,
+            childParentData.offset.dy,
+            0.0,
+            1.0,
+          )
+          ..scaleByDouble(_scale, _scale, 1.0, 1.0);
 
         isHit = result.addWithPaintTransform(
           transform: transform,

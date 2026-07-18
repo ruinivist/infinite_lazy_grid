@@ -47,19 +47,7 @@ class SingleColorBackground extends CanvasBackground {
     double scale,
     Size canvasSize,
   ) {
-    final paint = Paint()
-      ..color = bgColor
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRect(
-      Rect.fromLTWH(
-        screenOffset.dx,
-        screenOffset.dy,
-        canvasSize.width,
-        canvasSize.height,
-      ),
-      paint,
-    );
+    canvas.drawColor(bgColor, BlendMode.src);
   }
 }
 

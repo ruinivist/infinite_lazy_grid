@@ -1,12 +1,10 @@
-import 'dart:collection';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:infinite_lazy_grid/core/background.dart';
 import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
-import '../../utils/offset_extensions.dart';
-import '../../utils/size_extensions.dart';
 import '../../utils/conversions.dart';
 import '../../utils/styles.dart';
 import '../render.dart';
@@ -15,7 +13,10 @@ import 'package:uuid/uuid.dart';
 part 'debug.dart';
 part 'types.dart';
 
-final _kBuildCacheBuffer = Offset(50, 50); // buffer I always add to the input build cache extent
+final _kBuildCacheBuffer = Offset(
+  50,
+  50,
+); // buffer I always add to the input build cache extent
 
 /// Controller for [LazyCanvas]
 class LazyCanvasController with ChangeNotifier {
@@ -23,25 +24,27 @@ class LazyCanvasController with ChangeNotifier {
   Offset _gsTopLeftOffset = Offset.zero;
   double _baseScale = 1, _scale = 1;
   late Size _canvasSize;
-  final HashMap<CanvasChildId, _ChildInfo> _children = HashMap<CanvasChildId, _ChildInfo>(); // CanvasChildId for IDs
+  final Map<CanvasChildId, _ChildInfo> _children = {}; // CanvasChildId for IDs
   Offset? _buildCacheExtent;
   late Offset _buildExtent;
-  final Size _hashCellSize;
   bool _init = false;
-  late final SpatialHashing<CanvasChildId> _spatialHash;
+  final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
   late BuildContext _context;
-  CanvasChildId? _focusChildOnBuild; // if set, will focus on this child on the next render
+  CanvasChildId?
+  _focusChildOnBuild; // if set, will focus on this child on the next render
   CanvasBackground background;
   // these are used to cache result of widgetsWithScreenPositions
   List<ChildInfo> _lastRenderedWidgets = [];
   Offset? _lastProcessedOffset;
   double? _lastProcessedScale;
-  bool _markDirty = false; // do any of the non scale or offset changes require a rebuild?
+  bool _markDirty =
+      false; // do any of the non scale or offset changes require a rebuild?
   final bool useIdsFromArgs;
   OnWidgetEnteredRender? onWidgetEnteredRender;
   OnWidgetExitedRender? onWidgetExitedRender;
-  Set<CanvasChildId> _renderedWidgets = {}; // to track which widgets are currently rendered
+  Set<CanvasChildId> _renderedWidgets =
+      {}; // to track which widgets are currently rendered
   PointerDownEventListener? rawPointerDownListener;
   PointerMoveEventListener? rawPointerMoveListener;
   PointerUpEventListener? rawPointerUpListener;
@@ -65,13 +68,12 @@ class LazyCanvasController with ChangeNotifier {
     this.rawPointerMoveListener,
     this.rawPointerUpListener,
     this.rawPointerCancelListener,
-  }) : _hashCellSize = hashCellSize,
-       _buildCacheExtent = buildCacheExtent != null ? buildCacheExtent + _kBuildCacheBuffer : null
+  }) : _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
+       _buildCacheExtent = buildCacheExtent != null
+           ? buildCacheExtent + _kBuildCacheBuffer
+           : null;
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
-  {
-    _spatialHash = SpatialHashing<CanvasChildId>(cellSize: _hashCellSize);
-  }
 
   // ==================== Getters ====================
   Offset get offset => _gsTopLeftOffset;
@@ -79,7 +81,10 @@ class LazyCanvasController with ChangeNotifier {
   Size get canvasSize => _canvasSize;
   Offset get _ssCenter => Offset(_canvasSize.width / 2, _canvasSize.height / 2);
   Offset get _gsCenter => ssToGs(_ssCenter, _gsTopLeftOffset, _scale);
-  bool get _renderCacheDirty => _lastProcessedOffset != _gsTopLeftOffset || _lastProcessedScale != _scale || _markDirty;
+  bool get _renderCacheDirty =>
+      _lastProcessedOffset != _gsTopLeftOffset ||
+      _lastProcessedScale != _scale ||
+      _markDirty;
   Offset get buildExtent => _buildExtent;
   Offset? get buildCacheExtent => _buildCacheExtent;
 
@@ -87,10 +92,14 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Update the canvas size when the widget size changes.
   void onCanvasSizeChange(Size size) {
-    if (size == Size.zero) return; // ignore the zero side, linux first build pass error
+    if (size == Size.zero) {
+      return; // ignore the zero side, linux first build pass error
+    }
     if (_init && size == _canvasSize) return;
 
-    _buildExtent = Offset(size.width, size.height) + (_buildCacheExtent ?? Offset(size.width * 0.1, size.height * 0.1));
+    _buildExtent =
+        Offset(size.width, size.height) +
+        (_buildCacheExtent ?? Offset(size.width * 0.1, size.height * 0.1));
     _canvasSize = size; // allow resize due to canvas resize
 
     // if the first init, re-render as I don't have the canvas size to build widgets
@@ -118,7 +127,8 @@ class LazyCanvasController with ChangeNotifier {
   void setBuildCacheExtent(Offset extent) {
     _buildCacheExtent = extent + _kBuildCacheBuffer;
     if (_init) {
-      _buildExtent = Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
+      _buildExtent =
+          Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
     }
   }
 
@@ -137,13 +147,28 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Add a child at a given position with a widget. Returns the child ID.
   /// You need the child size for optimising the focus on child
-  CanvasChildId addChild(Offset position, Widget widget, {Size? childSize, CanvasChildId? id}) {
-    final childId = _addChildInternal(position, widget, childSize: childSize, id: id);
+  CanvasChildId addChild(
+    Offset position,
+    Widget widget, {
+    Size? childSize,
+    CanvasChildId? id,
+  }) {
+    final childId = _addChildInternal(
+      position,
+      widget,
+      childSize: childSize,
+      id: id,
+    );
     markDirty();
     return childId;
   }
 
-  CanvasChildId _addChildInternal(Offset position, Widget widget, {Size? childSize, CanvasChildId? id}) {
+  CanvasChildId _addChildInternal(
+    Offset position,
+    Widget widget, {
+    Size? childSize,
+    CanvasChildId? id,
+  }) {
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
     _children[id] = _ChildInfo(
@@ -151,14 +176,27 @@ class LazyCanvasController with ChangeNotifier {
       widget: Container(key: ValueKey<String>(id), child: widget),
       lastRenderedSize: childSize,
     );
-    _spatialHash.add(position.toPoint(), id); // add to spatial hash
+    _spatialHash.add(
+      Point(position.dx, position.dy),
+      id,
+    ); // add to spatial hash
     return id;
   }
 
-  List<CanvasChildId> addChildren(List<CanvasChildArgs> children, {CanvasChildId? focusOnBuild}) {
+  List<CanvasChildId> addChildren(
+    List<CanvasChildArgs> children, {
+    CanvasChildId? focusOnBuild,
+  }) {
     final ids = <CanvasChildId>[];
     for (final child in children) {
-      ids.add(_addChildInternal(child.position, child.widget, childSize: child.childSize, id: child.id));
+      ids.add(
+        _addChildInternal(
+          child.position,
+          child.widget,
+          childSize: child.childSize,
+          id: child.id,
+        ),
+      );
     }
     _focusChildOnBuild = focusOnBuild;
     markDirty();
@@ -170,7 +208,8 @@ class LazyCanvasController with ChangeNotifier {
     if (!_children.containsKey(id)) {
       throw _ChildNotFoundException;
     }
-    _spatialHash.remove(_children[id]!.gsPosition.toPoint());
+    final position = _children[id]!.gsPosition;
+    _spatialHash.remove(Point(position.dx, position.dy));
     _children.remove(id);
     markDirty();
   }
@@ -196,7 +235,10 @@ class LazyCanvasController with ChangeNotifier {
   /// Update a child's widget.
   void updateChildWidget(CanvasChildId id, Widget newWidget) {
     if (_children.containsKey(id)) {
-      _children[id]!.widget = Container(key: ValueKey<String>(id), child: newWidget);
+      _children[id]!.widget = Container(
+        key: ValueKey<String>(id),
+        child: newWidget,
+      );
       markDirty();
     } else {
       throw _ChildNotFoundException;
@@ -219,7 +261,12 @@ class LazyCanvasController with ChangeNotifier {
 
     if (details.scale != 1) {
       final newScale = _baseScale * details.scale;
-      _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, details.localFocalPoint, _scale, newScale);
+      _gsTopLeftOffset = newGsTopLeftOnScaling(
+        _gsTopLeftOffset,
+        details.localFocalPoint,
+        _scale,
+        newScale,
+      );
       _scale = newScale;
     }
 
@@ -236,7 +283,12 @@ class LazyCanvasController with ChangeNotifier {
     // added focalPoint param
     focalPoint ??= Offset(canvasSize.width / 2, canvasSize.height / 2);
     final newScale = _scale + delta;
-    _gsTopLeftOffset = newGsTopLeftOnScaling(_gsTopLeftOffset, focalPoint, _scale, newScale);
+    _gsTopLeftOffset = newGsTopLeftOnScaling(
+      _gsTopLeftOffset,
+      focalPoint,
+      _scale,
+      newScale,
+    );
     _scale = newScale;
     markDirty();
   }
@@ -292,30 +344,65 @@ class LazyCanvasController with ChangeNotifier {
       final item = _children[id]!;
       final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
       var child = item.widget;
-      if (debug) child = _Debug(key: ValueKey<String>(id), id: id, gs: item.gsPosition, ss: ssPosition, child: child);
-      return ChildInfo(id: id, gsPosition: item.gsPosition, ssPosition: ssPosition, child: child);
+      if (debug) {
+        child = _Debug(
+          key: ValueKey<String>(id),
+          id: id,
+          gs: item.gsPosition,
+          ss: ssPosition,
+          child: child,
+        );
+      }
+      return ChildInfo(
+        id: id,
+        gsPosition: item.gsPosition,
+        ssPosition: ssPosition,
+        child: child,
+      );
     }).toList();
   }
 
   List<CanvasChildId> _childrenWithinBuildArea(Offset center, Offset extent) {
-    Offset halfExtent = Offset((extent.dx / (2 * _scale)).ceilToDouble(), (extent.dy / (2 * _scale)).ceilToDouble());
-    final items = _spatialHash.getPointsAround(center.toPoint(), halfExtent);
+    Offset halfExtent = Offset(
+      (extent.dx / (2 * _scale)).ceilToDouble(),
+      (extent.dy / (2 * _scale)).ceilToDouble(),
+    );
+    final items = _spatialHash.getPointsAround(
+      Point(center.dx, center.dy),
+      halfExtent,
+    );
     return items.map((item) => item.data).toList(); // data is the child id here
   }
 
   // ==================== Centering & Focus Functions ====================
 
   /// Center the canvas so that the given screen-space offset is at the center of the viewport.
-  void centerOnScreenOffset(Offset ssOffset, {Duration? duration, bool animate = true}) {
-    centerOnGridOffset(ssToGs(ssOffset, _gsTopLeftOffset, _scale), animate: animate);
+  void centerOnScreenOffset(
+    Offset ssOffset, {
+    Duration? duration,
+    bool animate = true,
+  }) {
+    centerOnGridOffset(
+      ssToGs(ssOffset, _gsTopLeftOffset, _scale),
+      animate: animate,
+    );
   }
 
   /// Center the canvas so that the given grid-space offset is at the center of the viewport.
-  void centerOnGridOffset(Offset gsOffset, {Duration? duration, bool animate = true}) {
+  void centerOnGridOffset(
+    Offset gsOffset, {
+    Duration? duration,
+    bool animate = true,
+  }) {
     // if 2x scale you need to adjust lesser
-    final newGsTopLeft = gsOffset + (canvasSize * (2 * scale)).toOffset();
+    final newGsTopLeft =
+        gsOffset + (canvasSize * (2 * scale)).bottomRight(Offset.zero);
     if (animate) {
-      animateToOffsetAndScale(offset: newGsTopLeft, duration: duration, scale: _scale);
+      animateToOffsetAndScale(
+        offset: newGsTopLeft,
+        duration: duration,
+        scale: _scale,
+      );
     } else {
       _gsTopLeftOffset = newGsTopLeft;
       markDirty();
@@ -366,15 +453,26 @@ class LazyCanvasController with ChangeNotifier {
       case ScalingMode.fitInViewport:
         // the scale needs to be determined in this case
         // and hence a margin is needed to constrain on x, to get the scale, we then center it along y
-        newScale = (canvasSize.width - 2 * preferredHorizontalMargin) / childSize!.width;
+        newScale =
+            (canvasSize.width - 2 * preferredHorizontalMargin) /
+            childSize!.width;
         break;
     }
 
-    final marginOffset = ((canvasSize.toOffset() - (childSize! * scale).toOffset()) / (2 * scale)).makeAtleast(0);
+    final scaledChildSize = childSize! * scale;
+    final margin =
+        (canvasSize.bottomRight(Offset.zero) -
+            scaledChildSize.bottomRight(Offset.zero)) /
+        (2 * scale);
+    final marginOffset = Offset(max(0, margin.dx), max(0, margin.dy));
     newGsTopLeft = childInfo.gsPosition - marginOffset;
 
     if (animate) {
-      animateToOffsetAndScale(offset: newGsTopLeft, duration: duration, scale: newScale);
+      animateToOffsetAndScale(
+        offset: newGsTopLeft,
+        duration: duration,
+        scale: newScale,
+      );
     } else {
       _gsTopLeftOffset = newGsTopLeft;
       _scale = newScale;
@@ -391,12 +489,19 @@ class LazyCanvasController with ChangeNotifier {
     Duration? duration,
     Curve curve = Curves.easeInOut,
   }) async {
-    final anim = AnimationController(vsync: _ticker!, duration: duration ?? defaultAnimationDuration);
+    final anim = AnimationController(
+      vsync: _ticker!,
+      duration: duration ?? defaultAnimationDuration,
+    );
     final offsetTween = Tween<Offset>(begin: _gsTopLeftOffset, end: offset);
     final scaleTween = Tween<double>(begin: _scale, end: scale);
 
-    final offsetAnimation = offsetTween.animate(CurvedAnimation(parent: anim, curve: curve));
-    final scaleAnimation = scaleTween.animate(CurvedAnimation(parent: anim, curve: curve));
+    final offsetAnimation = offsetTween.animate(
+      CurvedAnimation(parent: anim, curve: curve),
+    );
+    final scaleAnimation = scaleTween.animate(
+      CurvedAnimation(parent: anim, curve: curve),
+    );
 
     anim.addListener(() {
       _gsTopLeftOffset = offsetAnimation.value;

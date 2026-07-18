@@ -1,23 +1,16 @@
-import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 typedef _CellKey = Point<int>;
 
-class PointData<T> {
-  final Point point;
-  final T data;
-
-  PointData(this.point, this.data);
-}
+typedef PointData<T> = ({Point point, T data});
 
 /// Data structure for spatial hashing to get widgets to be built quickly
 /// based on their position in a 2D grid.
 class SpatialHashing<T> {
   final Size cellSize;
-  final HashMap<Point, T> _pointData = HashMap<Point, T>();
-  final HashMap<_CellKey, List<Point>> _cellMap = HashMap<_CellKey, List<Point>>();
+  final Map<_CellKey, Map<Point, T>> _cellMap = {};
 
   SpatialHashing({required this.cellSize});
 
@@ -28,25 +21,19 @@ class SpatialHashing<T> {
   }
 
   void add(Point point, T data) {
-    _CellKey cellKey = _cellKey(point);
-    _pointData[point] = data;
-
-    if (!_cellMap.containsKey(cellKey)) {
-      _cellMap[cellKey] = [];
+    final points = _cellMap.putIfAbsent(_cellKey(point), () => {});
+    if (points.containsKey(point)) {
+      throw ArgumentError.value(point, 'point', 'must be unique');
     }
-    _cellMap[cellKey]!.add(point);
+    points[point] = data;
   }
 
   void remove(Point point) {
     final key = _cellKey(point);
-    if (_pointData.containsKey(point)) {
-      _pointData.remove(point); // remove the data
-
-      // cell map must have key then
-      _cellMap[key]!.remove(point); // remove from spatial hash
-      if (_cellMap[key]!.isEmpty) {
-        _cellMap.remove(key);
-      }
+    final points = _cellMap[key];
+    points?.remove(point);
+    if (points?.isEmpty ?? false) {
+      _cellMap.remove(key);
     }
   }
 
@@ -63,9 +50,10 @@ class SpatialHashing<T> {
     for (int x = startX; x <= endX; x++) {
       for (int y = startY; y <= endY; y++) {
         Point currentCellKey = Point(x, y);
-        if (_cellMap.containsKey(currentCellKey)) {
-          for (Point p in _cellMap[currentCellKey]!) {
-            results.add(PointData(p, _pointData[p] as T));
+        final points = _cellMap[currentCellKey];
+        if (points != null) {
+          for (final entry in points.entries) {
+            results.add((point: entry.key, data: entry.value));
           }
         }
       }
@@ -75,7 +63,6 @@ class SpatialHashing<T> {
   }
 
   void clear() {
-    _pointData.clear();
     _cellMap.clear();
   }
 }

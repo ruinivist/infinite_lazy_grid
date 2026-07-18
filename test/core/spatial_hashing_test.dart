@@ -35,8 +35,25 @@ void main() {
       spatialHashing.add(p2, 'B');
       final results = spatialHashing.getPointsAround(p1, const Offset(0, 0));
       expect(results.length, 2);
-      expect(results.any((pointData) => pointData.point == p1 && pointData.data == 'A'), isTrue);
-      expect(results.any((pointData) => pointData.point == p2 && pointData.data == 'B'), isTrue);
+      expect(
+        results.any(
+          (pointData) => pointData.point == p1 && pointData.data == 'A',
+        ),
+        isTrue,
+      );
+      expect(
+        results.any(
+          (pointData) => pointData.point == p2 && pointData.data == 'B',
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects duplicate points', () {
+      final point = Point(2, 2);
+      spatialHashing.add(point, 'A');
+
+      expect(() => spatialHashing.add(point, 'B'), throwsArgumentError);
     });
 
     test('add points in different cells and query with offset', () {
@@ -47,8 +64,18 @@ void main() {
       // Query with offset to include both cells
       final results = spatialHashing.getPointsAround(p1, const Offset(10, 10));
       expect(results.length, 2);
-      expect(results.any((pointData) => pointData.point == p1 && pointData.data == 'A'), isTrue);
-      expect(results.any((pointData) => pointData.point == p2 && pointData.data == 'B'), isTrue);
+      expect(
+        results.any(
+          (pointData) => pointData.point == p1 && pointData.data == 'A',
+        ),
+        isTrue,
+      );
+      expect(
+        results.any(
+          (pointData) => pointData.point == p2 && pointData.data == 'B',
+        ),
+        isTrue,
+      );
     });
 
     test('removing one of multiple points in a cell', () {
