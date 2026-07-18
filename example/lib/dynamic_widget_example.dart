@@ -10,12 +10,13 @@ class DynamicWidgetExample extends StatefulWidget {
 }
 
 class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
-  final LazyCanvasController controller = LazyCanvasController(debug: false, buildCacheExtent: const Offset(50, 50));
+  final LazyCanvasController controller = LazyCanvasController(
+    debug: false,
+    buildCacheExtent: const Offset(50, 50),
+  );
 
   // Store child IDs for later reference
-  late CanvasChildId selfManagedId;
   late CanvasChildId externalDataId;
-  late CanvasChildId reactiveId;
 
   // Simulate some dynamic data
   int counter = 0;
@@ -30,16 +31,23 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
 
   void _setupWidgets() {
     // Approach 1: Using StatefulWidget with state inside the widget getting lost if unmounted
-    selfManagedId = controller.addChild(const Offset(0, 0), SelfManagedCounterWidget(label: "Self-Managed"));
+    controller.addChild(
+      const Offset(0, 0),
+      SelfManagedCounterWidget(label: "Self-Managed"),
+    );
 
     // Approach 2: Using updateChildWidget, you need this since the children dep tree is direcly managed by the controller
     externalDataId = controller.addChild(
       const Offset(200, 0),
-      ExternalDataWidget(counter: counter, message: message, color: selectedColor),
+      ExternalDataWidget(
+        counter: counter,
+        message: message,
+        color: selectedColor,
+      ),
     );
 
     // Approach 3: Using ValueListenableBuilder for reactive updates
-    reactiveId = controller.addChild(
+    controller.addChild(
       const Offset(400, 0),
       ValueListenableBuilder<int>(
         valueListenable: _counterNotifier,
@@ -55,7 +63,10 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
             child: Center(
               child: Text(
                 'Reactive: $count',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           );
@@ -102,19 +113,33 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Three approaches for state updates:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Three approaches for state updates:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                const Text('1. Self-managed StatefulWidget (left), loses state on unmount'),
-                const Text('2. External data + updateChildWidget (center) - manual updates'),
-                const Text('3. ValueListenableBuilder (right) - reactive updates'),
+                const Text(
+                  '1. Self-managed StatefulWidget (left), loses state on unmount',
+                ),
+                const Text(
+                  '2. External data + updateChildWidget (center) - manual updates',
+                ),
+                const Text(
+                  '3. ValueListenableBuilder (right) - reactive updates',
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    ElevatedButton(onPressed: _updateExternalData, child: Text('Update External Data ($counter)')),
+                    ElevatedButton(
+                      onPressed: _updateExternalData,
+                      child: Text('Update External Data ($counter)'),
+                    ),
                     const SizedBox(width: 16),
                     ElevatedButton(
                       onPressed: _updateReactiveWidget,
-                      child: Text('Update Reactive Widget (${_counterNotifier.value})'),
+                      child: Text(
+                        'Update Reactive Widget (${_counterNotifier.value})',
+                      ),
                     ),
                   ],
                 ),
@@ -141,7 +166,8 @@ class SelfManagedCounterWidget extends StatefulWidget {
   const SelfManagedCounterWidget({super.key, required this.label});
 
   @override
-  State<SelfManagedCounterWidget> createState() => _SelfManagedCounterWidgetState();
+  State<SelfManagedCounterWidget> createState() =>
+      _SelfManagedCounterWidgetState();
 }
 
 class _SelfManagedCounterWidgetState extends State<SelfManagedCounterWidget> {
@@ -166,12 +192,21 @@ class _SelfManagedCounterWidgetState extends State<SelfManagedCounterWidget> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(widget.label, style: const TextStyle(color: Colors.white, fontSize: 10)),
+            Text(
+              widget.label,
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+            ),
             Text(
               'Count: $_count',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const Text('(Tap me)', style: TextStyle(color: Colors.white70, fontSize: 10)),
+            const Text(
+              '(Tap me)',
+              style: TextStyle(color: Colors.white70, fontSize: 10),
+            ),
           ],
         ),
       ),
@@ -185,7 +220,12 @@ class ExternalDataWidget extends StatelessWidget {
   final String message;
   final Color color;
 
-  const ExternalDataWidget({super.key, required this.counter, required this.message, required this.color});
+  const ExternalDataWidget({
+    super.key,
+    required this.counter,
+    required this.message,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -200,10 +240,17 @@ class ExternalDataWidget extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('External', style: TextStyle(color: Colors.white, fontSize: 10)),
+          const Text(
+            'External',
+            style: TextStyle(color: Colors.white, fontSize: 10),
+          ),
           Text(
             'Count: $counter',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
           ),
           Text(
             message,

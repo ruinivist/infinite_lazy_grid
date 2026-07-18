@@ -11,7 +11,9 @@ void main() {
       title: 'Infinite Lazy 2D Grid Examples',
       home: const ExampleChooser(),
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Color(0xffffbf69))),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Color(0xffffbf69)),
+      ),
     ),
   );
 }
@@ -29,28 +31,48 @@ class ExampleChooser extends StatelessWidget {
           children: [
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const SimpleExample()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SimpleExample(),
+                  ),
+                );
               },
               child: const Text('Simple Example'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const CachingTestApp()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CachingTestApp(),
+                  ),
+                );
               },
               child: const Text('Widget Build Counts'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const DynamicWidgetExample()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DynamicWidgetExample(),
+                  ),
+                );
               },
               child: const Text('Widget State Updates'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const RenderCallbacksExample()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RenderCallbacksExample(),
+                  ),
+                );
               },
               child: const Text('Render Callbacks Demo'),
             ),

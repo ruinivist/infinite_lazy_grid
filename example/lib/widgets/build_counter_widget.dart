@@ -6,7 +6,11 @@ class BuildCounterWidget extends StatefulWidget {
   final Color color;
   final String label;
 
-  const BuildCounterWidget({super.key, required this.color, required this.label});
+  const BuildCounterWidget({
+    super.key,
+    required this.color,
+    required this.label,
+  });
 
   @override
   State<BuildCounterWidget> createState() => _BuildCounterWidgetState();
@@ -17,7 +21,8 @@ class _BuildCounterWidgetState extends State<BuildCounterWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final count = _buildCounts[widget.label] = (_buildCounts[widget.label] ?? 0) + 1;
+    final count = _buildCounts[widget.label] =
+        (_buildCounts[widget.label] ?? 0) + 1;
 
     debugPrint('Building ${widget.label} - Build count: $count');
 
@@ -34,10 +39,17 @@ class _BuildCounterWidgetState extends State<BuildCounterWidget> {
         children: [
           Text(
             widget.label,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 4),
-          Text('Builds: $count', style: const TextStyle(color: Colors.white, fontSize: 10)),
+          Text(
+            'Builds: $count',
+            style: const TextStyle(color: Colors.white, fontSize: 10),
+          ),
         ],
       ),
     );

@@ -11,7 +11,6 @@ class RenderCallbacksExample extends StatefulWidget {
 
 class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
   late final LazyCanvasController controller;
-  final List<CanvasChildId> childIds = [];
   final List<String> logs = [];
   final ScrollController logScrollController = ScrollController();
 
@@ -42,11 +41,14 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
     // Create a 10x10 grid of widgets
     for (int row = 0; row < 4; row++) {
       for (int col = 0; col < 4; col++) {
-        final id = controller.addChild(
+        controller.addChild(
           Offset(col * 180.0, row * 180.0),
-          GridItem(row: row, col: col, color: Colors.primaries[(row * 10 + col) % Colors.primaries.length]),
+          GridItem(
+            row: row,
+            col: col,
+            color: Colors.primaries[(row * 10 + col) % Colors.primaries.length],
+          ),
         );
-        childIds.add(id);
       }
     }
   }
@@ -63,7 +65,11 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
     // Auto-scroll to top of logs
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (logScrollController.hasClients) {
-        logScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        logScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -104,14 +110,20 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
                     padding: const EdgeInsets.all(8),
                     decoration: const BoxDecoration(
                       color: Colors.blue,
-                      borderRadius: BorderRadius.only(topLeft: Radius.circular(8), topRight: Radius.circular(8)),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        topRight: Radius.circular(8),
+                      ),
                     ),
                     child: Row(
                       children: [
                         const Expanded(
                           child: Text(
                             'Render Callbacks Log',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         IconButton(
@@ -146,8 +158,12 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
                                 child: Row(
                                   children: [
                                     Icon(
-                                      isEntered ? Icons.add_circle : Icons.remove_circle,
-                                      color: isEntered ? Colors.green : Colors.red,
+                                      isEntered
+                                          ? Icons.add_circle
+                                          : Icons.remove_circle,
+                                      color: isEntered
+                                          ? Colors.green
+                                          : Colors.red,
                                       size: 16,
                                     ),
                                     const SizedBox(width: 8),
@@ -155,7 +171,9 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
                                       child: Text(
                                         log,
                                         style: TextStyle(
-                                          color: isEntered ? Colors.green : Colors.red,
+                                          color: isEntered
+                                              ? Colors.green
+                                              : Colors.red,
                                           fontSize: 12,
                                           fontFamily: 'monospace',
                                         ),
@@ -188,15 +206,23 @@ class GridItem extends StatelessWidget {
   final int col;
   final Color color;
 
-  const GridItem({super.key, required this.row, required this.col, required this.color});
+  const GridItem({
+    super.key,
+    required this.row,
+    required this.col,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Tapped grid item ($row, $col)'), duration: const Duration(seconds: 1)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tapped grid item ($row, $col)'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
       },
       child: Container(
         width: 80,
@@ -212,11 +238,19 @@ class GridItem extends StatelessWidget {
             children: [
               Text(
                 '$row',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               Text(
                 '$col',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ],
           ),

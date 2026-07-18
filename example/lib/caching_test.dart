@@ -10,7 +10,10 @@ class CachingTestApp extends StatefulWidget {
 }
 
 class _CachingTestAppState extends State<CachingTestApp> {
-  final LazyCanvasController controller = LazyCanvasController(debug: false, buildCacheExtent: const Offset(50, 50));
+  final LazyCanvasController controller = LazyCanvasController(
+    debug: false,
+    buildCacheExtent: const Offset(50, 50),
+  );
 
   @override
   void initState() {
@@ -21,7 +24,9 @@ class _CachingTestAppState extends State<CachingTestApp> {
       controller.addChild(
         Offset((i % 5) * 120.0, (i ~/ 5) * 120.0),
         BuildCounterWidget(
-          key: ValueKey<int>(i), // since in the tree it will be just an array at the same height, a count change
+          key: ValueKey<int>(
+            i,
+          ), // since in the tree it will be just an array at the same height, a count change
           // along the egdes of screen build all so you need a key to identify individually
           color: Colors.primaries[i % Colors.primaries.length],
           label: 'Widget $i',
@@ -33,24 +38,7 @@ class _CachingTestAppState extends State<CachingTestApp> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Widget Build Counts'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              // Force a rebuild by calling notifyListeners
-              // In this new approach, Flutter handles the caching
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Flutter automatically handles widget caching - no manual invalidation needed!'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Flutter Auto-Caching Info',
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Widget Build Counts')),
       body: LazyCanvas(controller: controller),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,

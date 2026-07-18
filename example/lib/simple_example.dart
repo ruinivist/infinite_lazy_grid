@@ -16,7 +16,10 @@ class _SimpleExampleState extends State<SimpleExample> {
   @override
   void initState() {
     final cacheExtent = const Offset(50, 50);
-    controller = LazyCanvasController(debug: true, buildCacheExtent: cacheExtent);
+    controller = LazyCanvasController(
+      debug: true,
+      buildCacheExtent: cacheExtent,
+    );
     final List<CanvasChildId> childIds = [];
 
     super.initState();
@@ -25,10 +28,16 @@ class _SimpleExampleState extends State<SimpleExample> {
         Offset((i % 80) * 100.0, (i ~/ 80) * 100.0),
         GestureDetector(
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tapped a container')));
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Tapped a container')));
             controller.focusOnChild(childIds[i]);
           },
-          child: InfoContainer(color: Colors.primaries[i % Colors.primaries.length]),
+          child: Container(
+            color: Colors.primaries[i % Colors.primaries.length],
+            width: 50,
+            height: 50,
+          ),
         ),
       );
       childIds.add(id);
@@ -57,7 +66,10 @@ class _SimpleExampleState extends State<SimpleExample> {
       ),
     );
 
-    controller.addChild(const Offset(330, 200), _PositionTracker(controller: controller, childId: trackId));
+    controller.addChild(
+      const Offset(330, 200),
+      _PositionTracker(controller: controller, childId: trackId),
+    );
   }
 
   @override
@@ -94,48 +106,23 @@ class _SimpleExampleState extends State<SimpleExample> {
   }
 }
 
-class InfoContainer extends StatelessWidget {
-  final Color color;
-  const InfoContainer({required this.color, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(color: color, width: 50, height: 50);
-  }
-}
-
-class _PositionTracker extends StatefulWidget {
+class _PositionTracker extends StatelessWidget {
   final LazyCanvasController controller;
   final CanvasChildId childId;
   const _PositionTracker({required this.controller, required this.childId});
 
   @override
-  State<_PositionTracker> createState() => _PositionTrackerState();
-}
-
-class _PositionTrackerState extends State<_PositionTracker> {
-  late final VoidCallback _listener;
-
-  @override
-  void initState() {
-    super.initState();
-    _listener = () {
-      if (mounted) setState(() {});
-    };
-    widget.controller.addListener(_listener);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_listener);
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final childPosition = widget.controller
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => _buildStatus(context),
+    );
+  }
+
+  Widget _buildStatus(BuildContext context) {
+    final childPosition = controller
         .widgetsWithScreenPositions()
-        .where((e) => e.id == widget.childId)
+        .where((e) => e.id == childId)
         .firstOrNull;
 
     final visible = childPosition != null;
@@ -149,7 +136,13 @@ class _PositionTrackerState extends State<_PositionTracker> {
         color: Theme.of(context).colorScheme.surface,
         border: Border(left: BorderSide(color: borderColor, width: 4)),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -157,7 +150,10 @@ class _PositionTrackerState extends State<_PositionTracker> {
         children: [
           Text(
             'This example uses tight build extents so you can see the text box get unmounted when its position ( top left ) goes off screen.\nIncrease it in your app.',
-            style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -167,27 +163,42 @@ class _PositionTrackerState extends State<_PositionTracker> {
               const SizedBox(width: 6),
               Text(
                 statusText,
-                style: TextStyle(color: borderColor, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: borderColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Cache extent: ${widget.controller.buildCacheExtent}',
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
+            'Cache extent: ${controller.buildCacheExtent}',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 6),
           if (visible)
             Text(
               'Text box position: ${childPosition.ssPosition}',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 13,
+              ),
             )
           else
-            const Text('Text box is off screen', style: TextStyle(fontSize: 13)),
+            const Text(
+              'Text box is off screen',
+              style: TextStyle(fontSize: 13),
+            ),
           const SizedBox(height: 16),
           Text(
             'Note: due to spatial hashing the offset is an approximate, not a pixel-perfect measure.',
-            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withAlpha(200)),
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(200),
+            ),
           ),
         ],
       ),
