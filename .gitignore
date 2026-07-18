@@ -32,4 +32,5 @@ build/
 
 # local readme stuff
 LOCAL_README.md
+ISSUES.md
 .codex
