@@ -268,14 +268,16 @@ class DotGridBackgroundCpu extends CanvasBackground {
     for (int nx = nStartX; nx <= nEndX; nx++) {
       final xGS = nx * spacing;
       final xSS = screenOffset.dx + (xGS - sign * canvasOffset.dx) * scale;
-      if (xSS + radiusSS < rect.left || xSS - radiusSS > rect.right)
+      if (xSS + radiusSS < rect.left || xSS - radiusSS > rect.right) {
         continue; // skip out-of-bounds columns
+      }
 
       for (int ny = nStartY; ny <= nEndY; ny++) {
         final yGS = ny * spacing;
         final ySS = screenOffset.dy + (yGS - sign * canvasOffset.dy) * scale;
-        if (ySS + radiusSS < rect.top || ySS - radiusSS > rect.bottom)
+        if (ySS + radiusSS < rect.top || ySS - radiusSS > rect.bottom) {
           continue; // skip out-of-bounds rows
+        }
 
         canvas.drawCircle(Offset(xSS, ySS), radiusSS, dotPaint);
       }
