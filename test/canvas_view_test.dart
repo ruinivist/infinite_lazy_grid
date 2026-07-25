@@ -87,6 +87,50 @@ void main() {
     expect(ssPositions, [Offset.zero, const Offset(200, 200)]);
   });
 
+  testWidgets('renders children at the same position', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    final firstId = controller.addChild(Offset.zero, const TestChild(index: 0));
+    controller.addChild(Offset.zero, const TestChild(index: 1));
+
+    await _pumpCanvas(tester, controller);
+
+    expect(find.byType(TestChild), findsNWidgets(2));
+
+    controller.removeChild(firstId);
+    await tester.pump();
+
+    expect(find.byType(TestChild), findsOneWidget);
+  });
+
+  testWidgets('stops rendering a child moved outside the viewport', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(
+      buildCacheExtent: Offset.zero,
+      hashCellSize: const Size(10, 10),
+    );
+    final id = controller.addChild(Offset.zero, const TestChild(index: 0));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    controller.updatePosition(id, const Offset(500, 0));
+    await tester.pump();
+
+    expect(find.byType(TestChild), findsNothing);
+  });
+
   testWidgets('build cache extent scales beyond each edge', (
     WidgetTester tester,
   ) async {

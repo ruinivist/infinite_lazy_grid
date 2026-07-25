@@ -10,7 +10,7 @@ typedef PointData<T> = ({Point point, T data});
 /// based on their position in a 2D grid.
 class SpatialHashing<T> {
   final Size cellSize;
-  final Map<_CellKey, Map<Point, T>> _cellMap = {};
+  final Map<_CellKey, List<PointData<T>>> _cellMap = {};
 
   SpatialHashing({required this.cellSize});
 
@@ -21,17 +21,16 @@ class SpatialHashing<T> {
   }
 
   void add(Point point, T data) {
-    final points = _cellMap.putIfAbsent(_cellKey(point), () => {});
-    if (points.containsKey(point)) {
-      throw ArgumentError.value(point, 'point', 'must be unique');
-    }
-    points[point] = data;
+    _cellMap.putIfAbsent(_cellKey(point), () => []).add((
+      point: point,
+      data: data,
+    ));
   }
 
-  void remove(Point point) {
+  void remove(Point point, T data) {
     final key = _cellKey(point);
     final points = _cellMap[key];
-    points?.remove(point);
+    points?.removeWhere((item) => item.point == point && item.data == data);
     if (points?.isEmpty ?? false) {
       _cellMap.remove(key);
     }
@@ -50,13 +49,13 @@ class SpatialHashing<T> {
       for (int y = start.y; y <= end.y; y++) {
         final points = _cellMap[Point(x, y)];
         if (points != null) {
-          for (final entry in points.entries) {
-            final candidate = entry.key;
+          for (final item in points) {
+            final candidate = item.point;
             if (candidate.x >= left &&
                 candidate.x <= right &&
                 candidate.y >= top &&
                 candidate.y <= bottom) {
-              results.add((point: candidate, data: entry.value));
+              results.add(item);
             }
           }
         }

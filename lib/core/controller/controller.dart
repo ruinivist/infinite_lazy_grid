@@ -204,11 +204,12 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Remove a child by its ID.
   void removeChild(CanvasChildId id) {
-    if (!_children.containsKey(id)) {
+    final child = _children[id];
+    if (child == null) {
       throw _ChildNotFoundException;
     }
-    final position = _children[id]!.gsPosition;
-    _spatialHash.remove(Point(position.dx, position.dy));
+    final position = child.gsPosition;
+    _spatialHash.remove(Point(position.dx, position.dy), id);
     _children.remove(id);
     markDirty();
   }
@@ -222,13 +223,16 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Update the position of a child by its ID.
   CanvasChildId updatePosition(CanvasChildId id, Offset newPosition) {
-    if (_children.containsKey(id)) {
-      _children[id]!.gsPosition = newPosition;
-      markDirty();
-      return id;
-    } else {
+    final child = _children[id];
+    if (child == null) {
       throw _ChildNotFoundException;
     }
+    final oldPosition = child.gsPosition;
+    _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
+    child.gsPosition = newPosition;
+    _spatialHash.add(Point(newPosition.dx, newPosition.dy), id);
+    markDirty();
+    return id;
   }
 
   /// Update a child's widget.

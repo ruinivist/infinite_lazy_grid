@@ -23,7 +23,7 @@ void main() {
     test('remove point', () {
       final point = Point(5, 5);
       spatialHashing.add(point, 'A');
-      spatialHashing.remove(point);
+      spatialHashing.remove(point, 'A');
       final results = spatialHashing.getPointsAround(point, const Offset(0, 0));
       expect(results, isEmpty);
     });
@@ -61,11 +61,13 @@ void main() {
       expect(results.map((result) => result.data), ['inside']);
     });
 
-    test('rejects duplicate points', () {
+    test('adds multiple values at the same point', () {
       final point = Point(2, 2);
       spatialHashing.add(point, 'A');
+      spatialHashing.add(point, 'B');
 
-      expect(() => spatialHashing.add(point, 'B'), throwsArgumentError);
+      final results = spatialHashing.getPointsAround(point, const Offset(0, 0));
+      expect(results.map((result) => result.data), ['A', 'B']);
     });
 
     test('add points in different cells and query with offset', () {
@@ -95,7 +97,7 @@ void main() {
       final p2 = Point(7, 7);
       spatialHashing.add(p1, 'A');
       spatialHashing.add(p2, 'B');
-      spatialHashing.remove(p1);
+      spatialHashing.remove(p1, 'A');
       final results = spatialHashing.getPointsAround(p2, const Offset(0, 0));
       expect(results.length, 1);
       expect(results.first.point, p2);
