@@ -33,7 +33,7 @@ void main() {
       final p2 = Point(7, 7);
       spatialHashing.add(p1, 'A');
       spatialHashing.add(p2, 'B');
-      final results = spatialHashing.getPointsAround(p1, const Offset(0, 0));
+      final results = spatialHashing.getPointsAround(p1, const Offset(5, 5));
       expect(results.length, 2);
       expect(
         results.any(
@@ -47,6 +47,18 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    test('filters points in partially intersecting cells', () {
+      spatialHashing.add(const Point(8, 8), 'inside');
+      spatialHashing.add(const Point(6, 6), 'outside');
+
+      final results = spatialHashing.getPointsAround(
+        const Point(25, 25),
+        const Offset(18, 18),
+      );
+
+      expect(results.map((result) => result.data), ['inside']);
     });
 
     test('rejects duplicate points', () {

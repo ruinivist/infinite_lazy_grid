@@ -38,22 +38,26 @@ class SpatialHashing<T> {
   }
 
   List<PointData<T>> getPointsAround(Point point, Offset offset) {
-    _CellKey cellKey = _cellKey(point);
-    List<PointData<T>> results = [];
+    final left = point.x - offset.dx;
+    final right = point.x + offset.dx;
+    final top = point.y - offset.dy;
+    final bottom = point.y + offset.dy;
+    final start = _cellKey(Point(left, top));
+    final end = _cellKey(Point(right, bottom));
+    final results = <PointData<T>>[];
 
-    // Calculate the range of cells to check
-    int startX = cellKey.x - (offset.dx / cellSize.width).floor();
-    int startY = cellKey.y - (offset.dy / cellSize.height).floor();
-    int endX = cellKey.x + (offset.dx / cellSize.width).ceil();
-    int endY = cellKey.y + (offset.dy / cellSize.height).ceil();
-
-    for (int x = startX; x <= endX; x++) {
-      for (int y = startY; y <= endY; y++) {
-        Point currentCellKey = Point(x, y);
-        final points = _cellMap[currentCellKey];
+    for (int x = start.x; x <= end.x; x++) {
+      for (int y = start.y; y <= end.y; y++) {
+        final points = _cellMap[Point(x, y)];
         if (points != null) {
           for (final entry in points.entries) {
-            results.add((point: entry.key, data: entry.value));
+            final candidate = entry.key;
+            if (candidate.x >= left &&
+                candidate.x <= right &&
+                candidate.y >= top &&
+                candidate.y <= bottom) {
+              results.add((point: candidate, data: entry.value));
+            }
           }
         }
       }
