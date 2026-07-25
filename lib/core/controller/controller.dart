@@ -1,6 +1,8 @@
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:infinite_lazy_grid/core/background.dart';
 import '../../utils/measure_size.dart';
@@ -24,6 +26,8 @@ class LazyCanvasController with ChangeNotifier {
   bool _init = false;
   final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
+  AnimationController? _activeAnimation;
+  bool _scaledDuringGesture = false;
   late BuildContext _context;
   CanvasChildId?
   _focusChildOnBuild; // if set, will focus on this child on the next render
@@ -47,12 +51,16 @@ class LazyCanvasController with ChangeNotifier {
 
   bool debug;
   final Duration defaultAnimationDuration;
+  final bool inertiaEnabled;
+  final double inertiaFrictionCoefficient;
 
   LazyCanvasController({
     this.debug = false,
     Offset? buildCacheExtent,
     Size hashCellSize = const Size(100, 100),
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
+    this.inertiaEnabled = true,
+    this.inertiaFrictionCoefficient = 0.0000135,
     this.background = const DotGridBackground(),
     this.useIdsFromArgs = false,
     this.onWidgetEnteredRender,
@@ -62,7 +70,8 @@ class LazyCanvasController with ChangeNotifier {
     this.rawPointerMoveListener,
     this.rawPointerUpListener,
     this.rawPointerCancelListener,
-  }) : _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
+  }) : assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
+       _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
        _buildCacheExtent = buildCacheExtent;
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
@@ -108,7 +117,8 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Set the ticker provider for animations.
-  void setTickerProvider(TickerProvider ticker) {
+  void setTickerProvider(TickerProvider? ticker) {
+    if (ticker == null) _stopAnimation();
     _ticker = ticker;
   }
 
@@ -236,7 +246,9 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Called when a scale gesture starts.
   void onScaleStart(ScaleStartDetails details) {
+    _stopAnimation();
     _baseScale = _scale;
+    _scaledDuringGesture = false;
   }
 
   /// Called when a scale gesture updates.
@@ -249,6 +261,7 @@ class LazyCanvasController with ChangeNotifier {
     // scale + offset => scale then offset
 
     if (details.scale != 1) {
+      _scaledDuringGesture = true;
       final newScale = _baseScale * details.scale;
       _gsTopLeftOffset = newGsTopLeftOnScaling(
         _gsTopLeftOffset,
@@ -267,8 +280,33 @@ class LazyCanvasController with ChangeNotifier {
     markDirty();
   }
 
+  /// Called when a scale gesture ends.
+  void onScaleEnd(ScaleEndDetails details) {
+    if (!inertiaEnabled || _scaledDuringGesture || _ticker == null) return;
+
+    final velocity = details.velocity.pixelsPerSecond;
+    final speed = velocity.distance;
+    if (speed < kMinFlingVelocity) return;
+
+    _stopAnimation();
+    final direction = velocity / speed;
+    var lastPosition = 0.0;
+    final animation = AnimationController.unbounded(vsync: _ticker!);
+    _activeAnimation = animation;
+    animation.addListener(() {
+      final delta = animation.value - lastPosition;
+      lastPosition = animation.value;
+      _gsTopLeftOffset -= direction * delta / _scale;
+      markDirty();
+    });
+    animation
+        .animateWith(FrictionSimulation(inertiaFrictionCoefficient, 0, speed))
+        .whenCompleteOrCancel(() => _disposeAnimation(animation));
+  }
+
   /// Increment or decrement the scale by an additive delta value.
   void updateScalebyDelta(double delta, {Offset? focalPoint}) {
+    _stopAnimation();
     // added focalPoint param
     focalPoint ??= Offset(canvasSize.width / 2, canvasSize.height / 2);
     final newScale = _scale + delta;
@@ -393,6 +431,7 @@ class LazyCanvasController with ChangeNotifier {
         scale: _scale,
       );
     } else {
+      _stopAnimation();
       _gsTopLeftOffset = newGsTopLeft;
       markDirty();
     }
@@ -463,6 +502,7 @@ class LazyCanvasController with ChangeNotifier {
         scale: newScale,
       );
     } else {
+      _stopAnimation();
       _gsTopLeftOffset = newGsTopLeft;
       _scale = newScale;
       markDirty();
@@ -478,19 +518,18 @@ class LazyCanvasController with ChangeNotifier {
     Duration? duration,
     Curve curve = Curves.easeInOut,
   }) async {
+    _stopAnimation();
     final anim = AnimationController(
       vsync: _ticker!,
       duration: duration ?? defaultAnimationDuration,
     );
+    _activeAnimation = anim;
     final offsetTween = Tween<Offset>(begin: _gsTopLeftOffset, end: offset);
     final scaleTween = Tween<double>(begin: _scale, end: scale);
 
-    final offsetAnimation = offsetTween.animate(
-      CurvedAnimation(parent: anim, curve: curve),
-    );
-    final scaleAnimation = scaleTween.animate(
-      CurvedAnimation(parent: anim, curve: curve),
-    );
+    final curvedAnimation = CurvedAnimation(parent: anim, curve: curve);
+    final offsetAnimation = offsetTween.animate(curvedAnimation);
+    final scaleAnimation = scaleTween.animate(curvedAnimation);
 
     anim.addListener(() {
       _gsTopLeftOffset = offsetAnimation.value;
@@ -498,7 +537,23 @@ class LazyCanvasController with ChangeNotifier {
       markDirty();
     });
 
-    await anim.forward();
-    anim.dispose();
+    try {
+      await anim.forward().orCancel;
+    } on TickerCanceled {
+      // A new interaction replaced this animation.
+    } finally {
+      curvedAnimation.dispose();
+      _disposeAnimation(anim);
+    }
+  }
+
+  void _stopAnimation() {
+    final animation = _activeAnimation;
+    _activeAnimation = null;
+    animation?.dispose();
+  }
+
+  void _disposeAnimation(AnimationController animation) {
+    if (_activeAnimation == animation) _stopAnimation();
   }
 }

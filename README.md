@@ -110,6 +110,9 @@ await controller.animateToOffsetAndScale(
 );
 ```
 
+Drag scrolling has inertia by default. Set `inertiaEnabled: false` to disable
+it, or adjust `inertiaFrictionCoefficient` to tune how quickly it settles.
+
 ### Background options
 
 ```dart

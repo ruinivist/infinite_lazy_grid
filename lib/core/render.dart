@@ -30,8 +30,15 @@ class _LazyCanvasState extends State<LazyCanvas>
   void didUpdateWidget(covariant LazyCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.setTickerProvider(null);
       widget.controller.setTickerProvider(this);
     }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.setTickerProvider(null);
+    super.dispose();
   }
 
   @override
@@ -78,6 +85,7 @@ class _LazyCanvasState extends State<LazyCanvas>
         behavior: HitTestBehavior.translucent,
         onScaleUpdate: widget.controller.onScaleUpdate,
         onScaleStart: widget.controller.onScaleStart,
+        onScaleEnd: widget.controller.onScaleEnd,
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (_, _) {

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 class TestChild extends StatelessWidget {
@@ -9,6 +10,16 @@ class TestChild extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(key: ValueKey('test_child_$index'), width: 50, height: 50);
   }
+}
+
+Future<void> _pumpCanvas(
+  WidgetTester tester,
+  LazyCanvasController controller,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(home: LazyCanvas(controller: controller)),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -139,5 +150,80 @@ void main() {
     expect(controller.scale, 2);
     expect(controller.widgetsWithScreenPositions().single.ssPosition.dy, -80);
     expect(find.byType(TestChild), findsOneWidget);
+  });
+
+  testWidgets('continues a pan with inertia at the current scale', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    await _pumpCanvas(tester, controller);
+
+    controller.updateScalebyDelta(1, focalPoint: Offset.zero);
+    controller.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    controller.onScaleEnd(
+      ScaleEndDetails(
+        velocity: const Velocity(pixelsPerSecond: Offset(1000, 0)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final screenDistance = FrictionSimulation(
+      controller.inertiaFrictionCoefficient,
+      0,
+      1000,
+    ).finalX;
+    expect(controller.offset.dx, closeTo(-screenDistance / 2, 0.01));
+    expect(controller.offset.dy, 0);
+  });
+
+  testWidgets('cancels inertia when a new gesture starts', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    await _pumpCanvas(tester, controller);
+
+    controller.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    controller.onScaleEnd(
+      ScaleEndDetails(
+        velocity: const Velocity(pixelsPerSecond: Offset(1000, 0)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    controller.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    final stoppedOffset = controller.offset;
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(controller.offset, stoppedOffset);
+  });
+
+  testWidgets('skips inertia when disabled or after scaling', (
+    WidgetTester tester,
+  ) async {
+    final disabledController = LazyCanvasController(inertiaEnabled: false);
+    await _pumpCanvas(tester, disabledController);
+
+    disabledController.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    disabledController.onScaleEnd(
+      ScaleEndDetails(
+        velocity: const Velocity(pixelsPerSecond: Offset(1000, 0)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(disabledController.offset, Offset.zero);
+
+    final scaledController = LazyCanvasController();
+    await _pumpCanvas(tester, scaledController);
+    scaledController.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    scaledController.onScaleUpdate(
+      ScaleUpdateDetails(focalPoint: Offset.zero, scale: 2),
+    );
+    scaledController.onScaleEnd(
+      ScaleEndDetails(
+        velocity: const Velocity(pixelsPerSecond: Offset(1000, 0)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(scaledController.offset, Offset.zero);
   });
 }
