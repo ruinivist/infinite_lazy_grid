@@ -12,7 +12,7 @@ class DynamicWidgetExample extends StatefulWidget {
 class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
   final LazyCanvasController controller = LazyCanvasController(
     debug: false,
-    buildCacheExtent: const Offset(50, 50),
+    buildCacheExtent: const Offset(300, 300),
   );
 
   // Store child IDs for later reference

@@ -12,7 +12,7 @@ class CachingTestApp extends StatefulWidget {
 class _CachingTestAppState extends State<CachingTestApp> {
   final LazyCanvasController controller = LazyCanvasController(
     debug: false,
-    buildCacheExtent: const Offset(50, 50),
+    buildCacheExtent: const Offset(300, 300),
   );
 
   @override

@@ -103,4 +103,41 @@ void main() {
 
     expect(find.byType(TestChild), findsOneWidget);
   });
+
+  testWidgets('keeps a partially visible scaled child mounted', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(
+      buildCacheExtent: const Offset(50, 50),
+      hashCellSize: const Size(10, 10),
+    );
+    controller.addChild(Offset.zero, const TestChild(index: 0));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    controller.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
+    controller.onScaleUpdate(
+      ScaleUpdateDetails(
+        focalPoint: Offset.zero,
+        focalPointDelta: const Offset(0, -40),
+      ),
+    );
+    controller.updateScalebyDelta(1, focalPoint: Offset.zero);
+    await tester.pumpAndSettle();
+
+    expect(controller.scale, 2);
+    expect(controller.widgetsWithScreenPositions().single.ssPosition.dy, -80);
+    expect(find.byType(TestChild), findsOneWidget);
+  });
 }
