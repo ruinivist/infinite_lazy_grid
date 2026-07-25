@@ -75,4 +75,32 @@ void main() {
         .toList();
     expect(ssPositions, [Offset.zero, const Offset(200, 200)]);
   });
+
+  testWidgets('build cache extent scales beyond each edge', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(
+      buildCacheExtent: const Offset(50, 50),
+      hashCellSize: const Size(10, 10),
+    );
+    controller.addChild(const Offset(150, 0), TestChild(index: 0));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    controller.updateScalebyDelta(1, focalPoint: Offset.zero);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TestChild), findsOneWidget);
+  });
 }

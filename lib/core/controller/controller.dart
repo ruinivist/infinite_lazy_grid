@@ -13,11 +13,6 @@ import 'package:uuid/uuid.dart';
 part 'debug.dart';
 part 'types.dart';
 
-final _kBuildCacheBuffer = Offset(
-  50,
-  50,
-); // buffer I always add to the input build cache extent
-
 /// Controller for [LazyCanvas]
 class LazyCanvasController with ChangeNotifier {
   final Uuid _uuid = Uuid();
@@ -26,7 +21,6 @@ class LazyCanvasController with ChangeNotifier {
   late Size _canvasSize;
   final Map<CanvasChildId, _ChildInfo> _children = {}; // CanvasChildId for IDs
   Offset? _buildCacheExtent;
-  late Offset _buildExtent;
   bool _init = false;
   final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
@@ -69,9 +63,7 @@ class LazyCanvasController with ChangeNotifier {
     this.rawPointerUpListener,
     this.rawPointerCancelListener,
   }) : _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
-       _buildCacheExtent = buildCacheExtent != null
-           ? buildCacheExtent + _kBuildCacheBuffer
-           : null;
+       _buildCacheExtent = buildCacheExtent;
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
 
@@ -85,7 +77,11 @@ class LazyCanvasController with ChangeNotifier {
       _lastProcessedOffset != _gsTopLeftOffset ||
       _lastProcessedScale != _scale ||
       _markDirty;
-  Offset get buildExtent => _buildExtent;
+  Offset get buildExtent =>
+      Offset(_canvasSize.width, _canvasSize.height) / _scale +
+      (_buildCacheExtent ??
+              Offset(_canvasSize.width * 0.05, _canvasSize.height * 0.05)) *
+          2;
   Offset? get buildCacheExtent => _buildCacheExtent;
 
   // ==================== Callback Functions ====================
@@ -97,9 +93,6 @@ class LazyCanvasController with ChangeNotifier {
     }
     if (_init && size == _canvasSize) return;
 
-    _buildExtent =
-        Offset(size.width, size.height) +
-        (_buildCacheExtent ?? Offset(size.width * 0.1, size.height * 0.1));
     _canvasSize = size; // allow resize due to canvas resize
 
     // if the first init, re-render as I don't have the canvas size to build widgets
@@ -125,11 +118,7 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Applied on the next build
   void setBuildCacheExtent(Offset extent) {
-    _buildCacheExtent = extent + _kBuildCacheBuffer;
-    if (_init) {
-      _buildExtent =
-          Offset(_canvasSize.width, _canvasSize.height) + _buildCacheExtent!;
-    }
+    _buildCacheExtent = extent;
   }
 
   // ==================== Utils ====================
@@ -320,7 +309,7 @@ class LazyCanvasController with ChangeNotifier {
     _lastProcessedScale = _scale;
     _markDirty = false;
 
-    final idsToBuild = _childrenWithinBuildArea(_gsCenter, _buildExtent);
+    final idsToBuild = _childrenWithinBuildArea(_gsCenter, buildExtent);
 
     // do the needed callbacks
     if (onWidgetEnteredRender != null || onWidgetExitedRender != null) {
@@ -364,8 +353,8 @@ class LazyCanvasController with ChangeNotifier {
 
   List<CanvasChildId> _childrenWithinBuildArea(Offset center, Offset extent) {
     Offset halfExtent = Offset(
-      (extent.dx / (2 * _scale)).ceilToDouble(),
-      (extent.dy / (2 * _scale)).ceilToDouble(),
+      (extent.dx / 2).ceilToDouble(),
+      (extent.dy / 2).ceilToDouble(),
     );
     final items = _spatialHash.getPointsAround(
       Point(center.dx, center.dy),
