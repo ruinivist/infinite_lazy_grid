@@ -1,6 +1,6 @@
 name: infinite_lazy_grid
 description: "infinitely scrollable and zoomable grid layout with lazy loading capabilities."
-version: 1.0.4
+version: 1.0.5
 homepage: https://github.com/ruinivist/infinite_lazy_grid
 
 environment:
@@ -20,3 +20,7 @@ dev_dependencies:
 flutter:
     shaders:
         - shaders/dot_grid.frag
+
+screenshots:
+    - description: "Infinite canvas with lazily rendered widgets"
+      path: demo.gif

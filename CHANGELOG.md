@@ -17,3 +17,10 @@
 ## 1.0.4
 
 -   Add `hasChild` method to controller
+
+## 1.0.5
+
+-   Add inertial drag scrolling with configurable friction.
+-   Fix child spatial index updates and removals.
+-   Fix cache extent scaling and spatial query bounds.
+-   Add animated package preview.
