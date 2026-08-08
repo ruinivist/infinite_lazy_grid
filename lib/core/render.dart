@@ -255,9 +255,29 @@ class _CanvasRenderBox extends RenderBox
 
   set canvasBackground(CanvasBackground canvasBackground) {
     if (_canvasBackground != canvasBackground) {
+      if (attached) {
+        _canvasBackground.repaint?.removeListener(_handleBackgroundRepaint);
+      }
       _canvasBackground = canvasBackground;
+      if (attached) {
+        _canvasBackground.repaint?.addListener(_handleBackgroundRepaint);
+      }
       markNeedsPaint();
     }
+  }
+
+  void _handleBackgroundRepaint() => markNeedsPaint();
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _canvasBackground.repaint?.addListener(_handleBackgroundRepaint);
+  }
+
+  @override
+  void detach() {
+    _canvasBackground.repaint?.removeListener(_handleBackgroundRepaint);
+    super.detach();
   }
 
   @override

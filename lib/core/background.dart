@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui show FragmentProgram; // for runtime shader
-import 'package:flutter/rendering.dart'
-    show RendererBinding; // to mark repaint after async load
 
 /// Abstract definition for a [LazyCanvas] background.
 abstract class CanvasBackground {
   /// the fill color of background
   final Color bgColor;
   const CanvasBackground({this.bgColor = Colors.white});
+
+  Listenable? get repaint => null;
 
   /// draw the backround on this context. Implement this to have
   /// different kinds of backgrounds
@@ -62,6 +62,10 @@ class DotGridBackground extends CanvasBackground {
   // Static shader program cache shared across instances
   static ui.FragmentProgram? _program;
   static Future<ui.FragmentProgram>? _programFuture;
+  static final ValueNotifier<int> _repaint = ValueNotifier(0);
+
+  @override
+  Listenable get repaint => _repaint;
 
   const DotGridBackground({
     this.size = 2.0,
@@ -81,12 +85,7 @@ class DotGridBackground extends CanvasBackground {
             )
             ..then((p) {
               _program = p;
-              // Request a repaint when shader becomes available
-              try {
-                for (final renderView in RendererBinding.instance.renderViews) {
-                  renderView.markNeedsPaint();
-                }
-              } catch (_) {}
+              _repaint.value++;
             }).catchError((_) {
               // keep _program null; we'll fallback to CPU/simple paint
             });

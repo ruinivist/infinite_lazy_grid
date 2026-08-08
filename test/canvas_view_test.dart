@@ -12,6 +12,27 @@ class TestChild extends StatelessWidget {
   }
 }
 
+class TestBackground extends CanvasBackground {
+  final _repaint = ValueNotifier(0);
+
+  @override
+  Listenable get repaint => _repaint;
+  int paintCount = 0;
+
+  void notify() => _repaint.value++;
+
+  @override
+  void paint(
+    Canvas canvas,
+    Offset screenOffset,
+    Offset canvasOffset,
+    double scale,
+    Size canvasSize,
+  ) {
+    paintCount++;
+  }
+}
+
 Future<void> _pumpCanvas(
   WidgetTester tester,
   LazyCanvasController controller,
@@ -23,6 +44,18 @@ Future<void> _pumpCanvas(
 }
 
 void main() {
+  testWidgets('repaints when the background becomes ready', (tester) async {
+    final background = TestBackground();
+    final controller = LazyCanvasController(background: background);
+    await _pumpCanvas(tester, controller);
+    final initialPaintCount = background.paintCount;
+
+    background.notify();
+    await tester.pump();
+
+    expect(background.paintCount, greaterThan(initialPaintCount));
+  });
+
   testWidgets(
     'CanvasView renders only visible children and reduces count on zoom out',
     (WidgetTester tester) async {
