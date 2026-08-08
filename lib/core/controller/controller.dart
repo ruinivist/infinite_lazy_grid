@@ -22,6 +22,7 @@ class LazyCanvasController with ChangeNotifier {
   double _baseScale = 1, _scale = 1;
   late Size _canvasSize;
   final Map<CanvasChildId, _ChildInfo> _children = {}; // CanvasChildId for IDs
+  var _nextPaintOrder = 0;
   Offset? _buildCacheExtent;
   bool _init = false;
   final SpatialHashing<CanvasChildId> _spatialHash;
@@ -174,6 +175,7 @@ class LazyCanvasController with ChangeNotifier {
       gsPosition: position,
       widget: Container(key: ValueKey<String>(id), child: widget),
       lastRenderedSize: childSize,
+      paintOrder: _nextPaintOrder++,
     );
     _spatialHash.add(
       Point(position.dx, position.dy),
@@ -218,6 +220,17 @@ class LazyCanvasController with ChangeNotifier {
   void clear() {
     _children.clear();
     _spatialHash.clear();
+    _nextPaintOrder = 0;
+    markDirty();
+  }
+
+  /// Paint and hit test this child above all other children.
+  void bringToFront(CanvasChildId id) {
+    final child = _children[id];
+    if (child == null) {
+      throw _ChildNotFoundException;
+    }
+    child.paintOrder = _nextPaintOrder++;
     markDirty();
   }
 
@@ -402,7 +415,9 @@ class LazyCanvasController with ChangeNotifier {
       Point(center.dx, center.dy),
       halfExtent,
     );
-    return items.map((item) => item.data).toList(); // data is the child id here
+    return items.map((item) => item.data).toList()..sort(
+      (a, b) => _children[a]!.paintOrder.compareTo(_children[b]!.paintOrder),
+    );
   }
 
   // ==================== Centering & Focus Functions ====================

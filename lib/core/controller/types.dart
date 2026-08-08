@@ -12,10 +12,12 @@ class _ChildInfo {
   Offset gsPosition;
   Size? lastRenderedSize;
   Widget widget;
+  int paintOrder;
 
   _ChildInfo({
     required this.gsPosition,
     required this.widget,
+    required this.paintOrder,
     this.lastRenderedSize,
   });
 }

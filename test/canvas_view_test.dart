@@ -104,6 +104,41 @@ void main() {
     expect(find.byType(TestChild), findsOneWidget);
   });
 
+  testWidgets('brings a child to the front', (WidgetTester tester) async {
+    final controller = LazyCanvasController();
+    var tapped = -1;
+    final firstId = controller.addChild(
+      Offset.zero,
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => tapped = 0,
+        child: const SizedBox(width: 50, height: 50),
+      ),
+    );
+    final secondId = controller.addChild(
+      Offset.zero,
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => tapped = 1,
+        child: const SizedBox(width: 50, height: 50),
+      ),
+    );
+    await _pumpCanvas(tester, controller);
+
+    await tester.tapAt(const Offset(10, 10));
+    expect(tapped, 1);
+
+    controller.bringToFront(firstId);
+    await tester.pump();
+    expect(controller.widgetsWithScreenPositions().map((child) => child.id), [
+      secondId,
+      firstId,
+    ]);
+
+    await tester.tapAt(const Offset(10, 10));
+    expect(tapped, 0);
+  });
+
   testWidgets('stops rendering a child moved outside the viewport', (
     WidgetTester tester,
   ) async {
