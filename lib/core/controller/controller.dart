@@ -321,6 +321,13 @@ class LazyCanvasController with ChangeNotifier {
         .whenCompleteOrCancel(() => _disposeAnimation(animation));
   }
 
+  /// Scroll the viewport by a screen-space pointer delta.
+  void scrollBy(Offset screenDelta) {
+    _stopAnimation();
+    _gsTopLeftOffset += screenDelta / _scale;
+    markDirty();
+  }
+
   /// Increment or decrement the scale by an additive delta value.
   void updateScalebyDelta(double delta, {Offset? focalPoint}) {
     _stopAnimation();

@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/services.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 class TestChild extends StatelessWidget {
@@ -43,7 +45,166 @@ Future<void> _pumpCanvas(
   await tester.pumpAndSettle();
 }
 
+Future<void> _drag(
+  WidgetTester tester, {
+  required PointerDeviceKind kind,
+  required int buttons,
+}) async {
+  final gesture = await tester.startGesture(
+    const Offset(200, 200),
+    kind: kind,
+    buttons: buttons,
+  );
+  await gesture.moveBy(const Offset(40, 30));
+  await gesture.up();
+  await tester.pump();
+}
+
 void main() {
+  testWidgets('configures mouse pan buttons without affecting touch', (
+    tester,
+  ) async {
+    final controller = LazyCanvasController(inertiaEnabled: false);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LazyCanvas(
+          controller: controller,
+          mousePanButtons: kSecondaryMouseButton | kMiddleMouseButton,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _drag(
+      tester,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryMouseButton,
+    );
+    expect(controller.offset, Offset.zero);
+
+    await _drag(
+      tester,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    expect(controller.offset.dx, lessThan(0));
+    final afterSecondary = controller.offset;
+
+    await _drag(
+      tester,
+      kind: PointerDeviceKind.mouse,
+      buttons: kMiddleMouseButton,
+    );
+    expect(controller.offset.dx, lessThan(afterSecondary.dx));
+    final afterMiddle = controller.offset;
+
+    await _drag(tester, kind: PointerDeviceKind.touch, buttons: kPrimaryButton);
+    expect(controller.offset.dx, lessThan(afterMiddle.dx));
+    final afterTouch = controller.offset;
+
+    final trackpad = await tester.startGesture(
+      const Offset(200, 200),
+      kind: PointerDeviceKind.trackpad,
+    );
+    await trackpad.panZoomUpdate(
+      const Offset(240, 230),
+      pan: const Offset(40, 30),
+    );
+    await trackpad.panZoomEnd();
+    await tester.pump();
+    expect(controller.offset.dx, lessThan(afterTouch.dx));
+  });
+
+  testWidgets('scrolls vertically and supports a replacement handler', (
+    tester,
+  ) async {
+    final defaultController = LazyCanvasController();
+    await _pumpCanvas(tester, defaultController);
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(200, 200),
+        scrollDelta: Offset(20, 40),
+      ),
+    );
+    await tester.pump();
+    expect(defaultController.offset, const Offset(0, 40));
+
+    final controller = LazyCanvasController();
+    Offset? receivedDelta;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LazyCanvas(
+          controller: controller,
+          onPointerScroll: (controller, delta) {
+            receivedDelta = delta;
+            controller.scrollBy(delta * 2);
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(200, 200),
+        scrollDelta: Offset(20, 40),
+      ),
+    );
+    await tester.pump();
+
+    expect(receivedDelta, const Offset(0, 40));
+    expect(controller.offset, const Offset(0, 80));
+  });
+
+  testWidgets('lets a nested scrollable consume wheel input', (tester) async {
+    final canvasController = LazyCanvasController();
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+    canvasController.addChild(
+      Offset.zero,
+      SizedBox(
+        width: 100,
+        height: 100,
+        child: ListView(
+          controller: scrollController,
+          children: const [SizedBox(height: 500)],
+        ),
+      ),
+    );
+    await _pumpCanvas(tester, canvasController);
+
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(20, 20),
+        scrollDelta: Offset(0, 40),
+      ),
+    );
+    await tester.pump();
+
+    expect(scrollController.offset, greaterThan(0));
+    expect(canvasController.offset, Offset.zero);
+  });
+
+  testWidgets('keeps control-wheel and pointer-scale zoom', (tester) async {
+    final controller = LazyCanvasController();
+    await _pumpCanvas(tester, controller);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(200, 200),
+        scrollDelta: Offset(0, -40),
+      ),
+    );
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    expect(controller.scale, closeTo(1.06, 0.001));
+
+    await tester.sendEventToBinding(
+      const PointerScaleEvent(position: Offset(200, 200), scale: 1.4),
+    );
+    expect(controller.scale, closeTo(1.16, 0.001));
+  });
+
   testWidgets('repaints when the background becomes ready', (tester) async {
     final background = TestBackground();
     final controller = LazyCanvasController(background: background);

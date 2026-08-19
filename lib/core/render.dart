@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
@@ -11,8 +10,16 @@ import 'controller/controller.dart';
 /// Needs a [LazyCanvasController] to control the canvas and a [CanvasBackground] to draw the background.
 class LazyCanvas extends StatefulWidget {
   final LazyCanvasController controller;
+  final int mousePanButtons;
+  final void Function(LazyCanvasController controller, Offset delta)?
+  onPointerScroll;
 
-  const LazyCanvas({required this.controller, super.key});
+  const LazyCanvas({
+    required this.controller,
+    this.mousePanButtons = kPrimaryMouseButton,
+    this.onPointerScroll,
+    super.key,
+  });
 
   @override
   State<LazyCanvas> createState() => _LazyCanvasState();
@@ -48,30 +55,38 @@ class _LazyCanvasState extends State<LazyCanvas>
       behavior: HitTestBehavior
           .translucent, // ensure scroll signals are captured even on empty space
       onPointerSignal: (event) {
-        // on web these are pointer scale events
-        if (kIsWeb) {
-          if (event is PointerScaleEvent) {
-            final delta = (event.scale - 1) * 0.25; // sensitivity
-            widget.controller.updateScalebyDelta(
-              delta,
-              focalPoint: event.localPosition,
-            );
-          }
-        } else {
-          // other desktop mouse wheel is scroll event
-          if (event is PointerScrollEvent) {
-            final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-            if (pressed.contains(LogicalKeyboardKey.controlLeft) ||
-                pressed.contains(LogicalKeyboardKey.controlRight)) {
-              // Typical mouse wheel up gives negative dy on many platforms; invert if needed
-              final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
-              if (delta != 0) {
-                widget.controller.updateScalebyDelta(
-                  delta,
-                  focalPoint: event.localPosition,
-                );
-              }
+        if (event is PointerScaleEvent) {
+          final delta = (event.scale - 1) * 0.25; // sensitivity
+          widget.controller.updateScalebyDelta(
+            delta,
+            focalPoint: event.localPosition,
+          );
+        } else if (event is PointerScrollEvent) {
+          final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+          if (pressed.contains(LogicalKeyboardKey.controlLeft) ||
+              pressed.contains(LogicalKeyboardKey.controlRight)) {
+            final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
+            if (delta != 0) {
+              widget.controller.updateScalebyDelta(
+                delta,
+                focalPoint: event.localPosition,
+              );
             }
+          } else if (event.scrollDelta.dy != 0) {
+            GestureBinding.instance.pointerSignalResolver.register(event, (
+              event,
+            ) {
+              final delta = Offset(
+                0,
+                (event as PointerScrollEvent).scrollDelta.dy,
+              );
+              final handler = widget.onPointerScroll;
+              if (handler == null) {
+                widget.controller.scrollBy(delta);
+              } else {
+                handler(widget.controller, delta);
+              }
+            });
           }
         }
         // handle any other registered signal events
@@ -81,11 +96,21 @@ class _LazyCanvasState extends State<LazyCanvas>
       onPointerMove: widget.controller.rawPointerMoveListener,
       onPointerUp: widget.controller.rawPointerUpListener,
       onPointerCancel: widget.controller.rawPointerCancelListener,
-      child: GestureDetector(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.translucent,
-        onScaleUpdate: widget.controller.onScaleUpdate,
-        onScaleStart: widget.controller.onScaleStart,
-        onScaleEnd: widget.controller.onScaleEnd,
+        gestures: {
+          _NonMouseScaleGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<
+                _NonMouseScaleGestureRecognizer
+              >(_NonMouseScaleGestureRecognizer.new, _configureScaleRecognizer),
+          _MouseScaleGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<
+                _MouseScaleGestureRecognizer
+              >(_MouseScaleGestureRecognizer.new, (recognizer) {
+                recognizer.mousePanButtons = widget.mousePanButtons;
+                _configureScaleRecognizer(recognizer);
+              }),
+        },
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (_, _) {
@@ -130,6 +155,32 @@ class _LazyCanvasState extends State<LazyCanvas>
       ),
     );
   }
+
+  void _configureScaleRecognizer(ScaleGestureRecognizer recognizer) {
+    recognizer
+      ..onStart = widget.controller.onScaleStart
+      ..onUpdate = widget.controller.onScaleUpdate
+      ..onEnd = widget.controller.onScaleEnd;
+  }
+}
+
+class _NonMouseScaleGestureRecognizer extends ScaleGestureRecognizer {
+  @override
+  bool isPointerAllowed(PointerDownEvent event) =>
+      event.kind != PointerDeviceKind.mouse && super.isPointerAllowed(event);
+}
+
+class _MouseScaleGestureRecognizer extends ScaleGestureRecognizer {
+  int mousePanButtons = kPrimaryMouseButton;
+
+  @override
+  bool isPointerPanZoomAllowed(PointerPanZoomStartEvent event) => false;
+
+  @override
+  bool isPointerAllowed(PointerDownEvent event) =>
+      event.kind == PointerDeviceKind.mouse &&
+      event.buttons & mousePanButtons != 0 &&
+      super.isPointerAllowed(event);
 }
 
 /// A combined widget for all the render object of the children + background.
