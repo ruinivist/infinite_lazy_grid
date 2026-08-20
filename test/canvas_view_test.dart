@@ -217,6 +217,20 @@ void main() {
     expect(background.paintCount, greaterThan(initialPaintCount));
   });
 
+  testWidgets('repaints when the controller background changes', (
+    tester,
+  ) async {
+    final initial = TestBackground();
+    final replacement = TestBackground();
+    final controller = LazyCanvasController(background: initial);
+    await _pumpCanvas(tester, controller);
+
+    controller.background = replacement;
+    await tester.pump();
+
+    expect(replacement.paintCount, greaterThan(0));
+  });
+
   testWidgets(
     'CanvasView renders only visible children and reduces count on zoom out',
     (WidgetTester tester) async {

@@ -305,7 +305,7 @@ class _CanvasRenderBox extends RenderBox
   }
 
   set canvasBackground(CanvasBackground canvasBackground) {
-    if (_canvasBackground != canvasBackground) {
+    if (!identical(_canvasBackground, canvasBackground)) {
       if (attached) {
         _canvasBackground.repaint?.removeListener(_handleBackgroundRepaint);
       }

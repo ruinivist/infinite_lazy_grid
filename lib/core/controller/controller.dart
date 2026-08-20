@@ -32,7 +32,7 @@ class LazyCanvasController with ChangeNotifier {
   late BuildContext _context;
   CanvasChildId?
   _focusChildOnBuild; // if set, will focus on this child on the next render
-  CanvasBackground background;
+  CanvasBackground _background;
   // these are used to cache result of widgetsWithScreenPositions
   List<ChildInfo> _lastRenderedWidgets = [];
   Offset? _lastProcessedOffset;
@@ -62,7 +62,7 @@ class LazyCanvasController with ChangeNotifier {
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
     this.inertiaEnabled = true,
     this.inertiaFrictionCoefficient = 0.0000135,
-    this.background = const DotGridBackground(),
+    CanvasBackground background = const DotGridBackground(),
     this.useIdsFromArgs = false,
     this.onWidgetEnteredRender,
     this.onWidgetExitedRender,
@@ -72,6 +72,7 @@ class LazyCanvasController with ChangeNotifier {
     this.rawPointerUpListener,
     this.rawPointerCancelListener,
   }) : assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
+       _background = background,
        _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
        _buildCacheExtent = buildCacheExtent;
   // only top left is considered so if a widget has long width, it'll not be rendered
@@ -93,6 +94,13 @@ class LazyCanvasController with ChangeNotifier {
               Offset(_canvasSize.width * 0.05, _canvasSize.height * 0.05)) *
           2;
   Offset? get buildCacheExtent => _buildCacheExtent;
+  CanvasBackground get background => _background;
+
+  set background(CanvasBackground value) {
+    if (identical(_background, value)) return;
+    _background = value;
+    markDirty();
+  }
 
   // ==================== Callback Functions ====================
 
