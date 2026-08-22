@@ -312,6 +312,150 @@ void main() {
     expect(find.byType(TestChild), findsOneWidget);
   });
 
+  testWidgets('moves one child by a grid-space delta and returns its ID', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    final id = controller.addChild(
+      const Offset(10, 20),
+      const TestChild(index: 0),
+    );
+    await _pumpCanvas(tester, controller);
+
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+
+    expect(controller.moveChildBy(id, const Offset(3, -4)), id);
+    expect(notifications, 1);
+    await tester.pump();
+
+    expect(
+      controller.widgetsWithScreenPositions().single.gsPosition,
+      const Offset(13, 16),
+    );
+  });
+
+  testWidgets('moves unique children once and updates lazy spatial lookup', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(
+      buildCacheExtent: Offset.zero,
+      hashCellSize: const Size(10, 10),
+    );
+    final firstId = controller.addChild(
+      const Offset(-100, 0),
+      const TestChild(index: 0),
+    );
+    final secondId = controller.addChild(
+      Offset.zero,
+      const TestChild(index: 1),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    controller.moveChildrenBy([
+      firstId,
+      firstId,
+      secondId,
+    ], const Offset(100, 0));
+    expect(notifications, 1);
+    await tester.pump();
+
+    expect(
+      controller.widgetsWithScreenPositions().map((child) => child.gsPosition),
+      [Offset.zero, const Offset(100, 0)],
+    );
+  });
+
+  testWidgets('validates every child before moving any child', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    final id = controller.addChild(Offset.zero, const TestChild(index: 0));
+    await _pumpCanvas(tester, controller);
+
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+
+    expect(
+      () => controller.moveChildrenBy([id, 'missing'], const Offset(10, 10)),
+      throwsA(isA<Exception>()),
+    );
+    expect(notifications, 0);
+    expect(
+      controller
+          .widgetsWithScreenPositions(forceRebuild: true)
+          .single
+          .gsPosition,
+      Offset.zero,
+    );
+  });
+
+  testWidgets('does nothing when moving an empty child list', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController();
+    final id = controller.addChild(Offset.zero, const TestChild(index: 0));
+    await _pumpCanvas(tester, controller);
+
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    controller.moveChildrenBy(const [], const Offset(10, 10));
+
+    expect(notifications, 0);
+    expect(controller.widgetsWithScreenPositions().single.id, id);
+    expect(
+      controller.widgetsWithScreenPositions().single.gsPosition,
+      Offset.zero,
+    );
+  });
+
+  testWidgets('moveChildrenBy mounts and unmounts children lazily', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(
+      buildCacheExtent: Offset.zero,
+      hashCellSize: const Size(10, 10),
+    );
+    final id = controller.addChild(
+      const Offset(500, 0),
+      const TestChild(index: 0),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TestChild), findsNothing);
+
+    controller.moveChildrenBy([id], const Offset(-500, 0));
+    await tester.pump();
+    expect(find.byType(TestChild), findsOneWidget);
+
+    controller.moveChildrenBy([id], const Offset(500, 0));
+    await tester.pump();
+    expect(find.byType(TestChild), findsNothing);
+  });
+
   testWidgets('brings a child to the front', (WidgetTester tester) async {
     final controller = LazyCanvasController();
     var tapped = -1;

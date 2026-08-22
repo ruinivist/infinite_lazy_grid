@@ -244,6 +244,38 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Update the position of a child by its ID.
   CanvasChildId updatePosition(CanvasChildId id, Offset newPosition) {
+    _updateChildPosition(id, newPosition);
+    markDirty();
+    return id;
+  }
+
+  /// Move a child by [gridDelta] in canvas/grid coordinates, not screen coordinates.
+  /// Returns the child ID.
+  CanvasChildId moveChildBy(CanvasChildId id, Offset gridDelta) {
+    final child = _children[id];
+    if (child == null) {
+      throw _ChildNotFoundException;
+    }
+    _updateChildPosition(id, child.gsPosition + gridDelta);
+    markDirty();
+    return id;
+  }
+
+  /// Move children by [gridDelta] in canvas/grid coordinates, not screen coordinates.
+  void moveChildrenBy(Iterable<CanvasChildId> ids, Offset gridDelta) {
+    final uniqueIds = ids.toSet();
+    for (final id in uniqueIds) {
+      if (!_children.containsKey(id)) {
+        throw _ChildNotFoundException;
+      }
+    }
+    for (final id in uniqueIds) {
+      _updateChildPosition(id, _children[id]!.gsPosition + gridDelta);
+    }
+    if (uniqueIds.isNotEmpty) markDirty();
+  }
+
+  void _updateChildPosition(CanvasChildId id, Offset newPosition) {
     final child = _children[id];
     if (child == null) {
       throw _ChildNotFoundException;
@@ -252,8 +284,6 @@ class LazyCanvasController with ChangeNotifier {
     _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
     child.gsPosition = newPosition;
     _spatialHash.add(Point(newPosition.dx, newPosition.dy), id);
-    markDirty();
-    return id;
   }
 
   /// Update a child's widget.
