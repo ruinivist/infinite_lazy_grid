@@ -339,7 +339,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final controller = LazyCanvasController(
-      buildCacheExtent: Offset.zero,
+      buildExtentMultiplier: 1,
       hashCellSize: const Size(10, 10),
     );
     final firstId = controller.addChild(
@@ -426,7 +426,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final controller = LazyCanvasController(
-      buildCacheExtent: Offset.zero,
+      buildExtentMultiplier: 1,
       hashCellSize: const Size(10, 10),
     );
     final id = controller.addChild(
@@ -495,7 +495,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final controller = LazyCanvasController(
-      buildCacheExtent: Offset.zero,
+      buildExtentMultiplier: 1,
       hashCellSize: const Size(10, 10),
     );
     final id = controller.addChild(Offset.zero, const TestChild(index: 0));
@@ -518,14 +518,12 @@ void main() {
     expect(find.byType(TestChild), findsNothing);
   });
 
-  testWidgets('build cache extent scales beyond each edge', (
+  testWidgets('builds twice the viewport by default', (
     WidgetTester tester,
   ) async {
-    final controller = LazyCanvasController(
-      buildCacheExtent: const Offset(50, 50),
-      hashCellSize: const Size(10, 10),
-    );
-    controller.addChild(const Offset(150, 0), TestChild(index: 0));
+    final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
+    controller.addChild(const Offset(250, 0), const TestChild(index: 0));
+    controller.addChild(const Offset(350, 0), const TestChild(index: 1));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -540,19 +538,69 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    controller.updateScalebyDelta(1, focalPoint: Offset.zero);
+    expect(find.byKey(const ValueKey('test_child_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('test_child_1')), findsNothing);
+  });
+
+  testWidgets('updates the build region after viewport resize', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
+    controller.addChild(const Offset(500, 0), const TestChild(index: 0));
+
+    Widget canvas(double width) => MaterialApp(
+      home: Center(
+        child: SizedBox(
+          width: width,
+          height: 200,
+          child: LazyCanvas(controller: controller),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(canvas(200));
+    await tester.pumpAndSettle();
+    expect(find.byType(TestChild), findsNothing);
+
+    await tester.pumpWidget(canvas(400));
+    await tester.pumpAndSettle();
+    expect(find.byType(TestChild), findsOneWidget);
+
+    await tester.pumpWidget(canvas(200));
+    await tester.pumpAndSettle();
+    expect(find.byType(TestChild), findsNothing);
+  });
+
+  testWidgets('keeps the build region relative while zooming', (
+    WidgetTester tester,
+  ) async {
+    final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
+    controller.addChild(const Offset(250, 0), const TestChild(index: 0));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 200,
+            child: LazyCanvas(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TestChild), findsOneWidget);
+
+    controller.updateScalebyDelta(1, focalPoint: const Offset(100, 100));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TestChild), findsOneWidget);
+    expect(find.byType(TestChild), findsNothing);
   });
 
   testWidgets('keeps a partially visible scaled child mounted', (
     WidgetTester tester,
   ) async {
-    final controller = LazyCanvasController(
-      buildCacheExtent: const Offset(50, 50),
-      hashCellSize: const Size(10, 10),
-    );
+    final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
     controller.addChild(Offset.zero, const TestChild(index: 0));
 
     await tester.pumpWidget(

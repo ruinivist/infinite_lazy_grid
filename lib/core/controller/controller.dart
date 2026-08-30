@@ -23,7 +23,6 @@ class LazyCanvasController with ChangeNotifier {
   late Size _canvasSize;
   final Map<CanvasChildId, _ChildInfo> _children = {}; // CanvasChildId for IDs
   var _nextPaintOrder = 0;
-  Offset? _buildCacheExtent;
   bool _init = false;
   final SpatialHashing<CanvasChildId> _spatialHash;
   TickerProvider? _ticker;
@@ -54,10 +53,11 @@ class LazyCanvasController with ChangeNotifier {
   final Duration defaultAnimationDuration;
   final bool inertiaEnabled;
   final double inertiaFrictionCoefficient;
+  final double buildExtentMultiplier;
 
   LazyCanvasController({
     this.debug = false,
-    Offset? buildCacheExtent,
+    this.buildExtentMultiplier = 2,
     Size hashCellSize = const Size(100, 100),
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
     this.inertiaEnabled = true,
@@ -71,10 +71,10 @@ class LazyCanvasController with ChangeNotifier {
     this.rawPointerMoveListener,
     this.rawPointerUpListener,
     this.rawPointerCancelListener,
-  }) : assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
+  }) : assert(buildExtentMultiplier >= 1),
+       assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
        _background = background,
-       _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize),
-       _buildCacheExtent = buildCacheExtent;
+       _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize);
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
 
@@ -89,11 +89,9 @@ class LazyCanvasController with ChangeNotifier {
       _lastProcessedScale != _scale ||
       _markDirty;
   Offset get buildExtent =>
-      Offset(_canvasSize.width, _canvasSize.height) / _scale +
-      (_buildCacheExtent ??
-              Offset(_canvasSize.width * 0.05, _canvasSize.height * 0.05)) *
-          2;
-  Offset? get buildCacheExtent => _buildCacheExtent;
+      Offset(_canvasSize.width, _canvasSize.height) /
+      _scale *
+      buildExtentMultiplier;
   CanvasBackground get background => _background;
 
   set background(CanvasBackground value) {
@@ -112,12 +110,8 @@ class LazyCanvasController with ChangeNotifier {
     if (_init && size == _canvasSize) return;
 
     _canvasSize = size; // allow resize due to canvas resize
-
-    // if the first init, re-render as I don't have the canvas size to build widgets
-    if (!_init) {
-      _init = true;
-      Future.microtask(markDirty);
-    }
+    _init = true;
+    Future.microtask(markDirty);
   }
 
   /// Called when a child widget's size changes.
@@ -133,11 +127,6 @@ class LazyCanvasController with ChangeNotifier {
 
   void setBuildContext(BuildContext context) {
     _context = context;
-  }
-
-  /// Applied on the next build
-  void setBuildCacheExtent(Offset extent) {
-    _buildCacheExtent = extent;
   }
 
   // ==================== Utils ====================
