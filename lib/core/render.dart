@@ -407,6 +407,19 @@ class _CanvasRenderBox extends RenderBox
   }
 
   @override
+  void applyPaintTransform(RenderObject child, Matrix4 transform) {
+    final childParentData = child.parentData! as _CanvasWidgetParentData;
+    transform
+      ..translateByDouble(
+        childParentData.offset.dx,
+        childParentData.offset.dy,
+        0.0,
+        1.0,
+      )
+      ..scaleByDouble(_scale, _scale, 1.0, 1.0);
+  }
+
+  @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     RenderBox? child = lastChild;
     while (child != null) {

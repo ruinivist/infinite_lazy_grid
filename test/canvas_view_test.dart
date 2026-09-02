@@ -288,6 +288,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(controller.scale, 2.0);
+    expect(
+      tester.getBottomRight(find.byKey(const ValueKey('test_child_0'))),
+      const Offset(100, 100),
+    );
     final ssPositions = controller
         .widgetsWithScreenPositions()
         .map((e) => e.ssPosition)
