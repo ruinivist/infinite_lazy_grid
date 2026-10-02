@@ -150,6 +150,20 @@ LazyCanvas(
 Apply the same guard to tool move/up handlers and child drag callbacks. Raw
 pointer events still arrive, and child gesture recognizers are not canceled
 automatically. Navigation can take over even after a child has won a drag.
+Keep interrupted pointers suppressed through their final event dispatch:
+ownership can become false before a child's final-up tap callback runs.
+
+Use `viewportBuilder` to put floating object controls in the same gesture
+region. An overlay outside `LazyCanvas` will not contribute touches:
+
+```dart
+viewportBuilder: (context, viewport) => Overlay.wrap(
+  child: Stack(children: [viewport, objectControls]),
+),
+```
+
+Keep the supplied viewport at the region's origin and original size. A local
+`Overlay` also keeps descendant overlay portals in that gesture region.
 
 When fewer than two fingers remain, the canvas freezes and ownership remains
 active until **all** touches release or cancel. Adding another finger during

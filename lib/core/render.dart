@@ -23,6 +23,10 @@ class LazyCanvas extends StatefulWidget {
   /// Consumers must cancel their tool operation and suppress further tool input;
   /// raw events and child gestures are not automatically canceled.
   final ValueChanged<bool>? onTouchNavigationChanged;
+
+  /// Composes the viewport and app overlays inside the canvas gesture region.
+  /// Keep the supplied viewport at the region's origin and original size.
+  final Widget Function(BuildContext context, Widget viewport)? viewportBuilder;
   final void Function(LazyCanvasController controller, Offset delta)?
   onPointerScroll;
 
@@ -31,6 +35,7 @@ class LazyCanvas extends StatefulWidget {
     this.mousePanButtons = kPrimaryMouseButton,
     this.touchNavigationMode = TouchNavigationMode.oneFinger,
     this.onTouchNavigationChanged,
+    this.viewportBuilder,
     this.onPointerScroll,
     super.key,
   });
@@ -154,7 +159,7 @@ class _LazyCanvasState extends State<LazyCanvas>
         },
         child: ListenableBuilder(
           listenable: widget.controller,
-          builder: (_, _) {
+          builder: (context, _) {
             final childrenWithPositions = widget.controller
                 .widgetsWithScreenPositions();
             final ssPositions = childrenWithPositions
@@ -162,7 +167,7 @@ class _LazyCanvasState extends State<LazyCanvas>
                 .toList();
             final childrenIds = childrenWithPositions.map((e) => e.id).toList();
             final children = childrenWithPositions.map((e) => e.child).toList();
-            final canvas = _CanvasRenderObject(
+            Widget viewport = _CanvasRenderObject(
               childrenIds: childrenIds,
               canvasBackground: widget.controller.background,
               ssPositions: ssPositions,
@@ -174,9 +179,9 @@ class _LazyCanvasState extends State<LazyCanvas>
             );
 
             if (widget.controller.debug) {
-              return Stack(
+              viewport = Stack(
                 children: [
-                  canvas,
+                  viewport,
                   Positioned(
                     top: 16,
                     left: 16,
@@ -190,7 +195,7 @@ class _LazyCanvasState extends State<LazyCanvas>
                 ],
               );
             }
-            return canvas;
+            return widget.viewportBuilder?.call(context, viewport) ?? viewport;
           },
         ),
       ),

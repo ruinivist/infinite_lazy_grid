@@ -71,6 +71,60 @@ Future<void> _drag(
 }
 
 void main() {
+  testWidgets('composed overlays share the viewport touch region', (
+    tester,
+  ) async {
+    final controller = LazyCanvasController();
+    var navigating = false;
+    var overlayMoves = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LazyCanvas(
+          controller: controller,
+          touchNavigationMode: TouchNavigationMode.twoFinger,
+          onTouchNavigationChanged: (active) => navigating = active,
+          viewportBuilder: (context, viewport) => Stack(
+            children: [
+              viewport,
+              Positioned(
+                left: 40,
+                top: 40,
+                width: 100,
+                height: 100,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanUpdate: (_) {
+                    if (!navigating) overlayMoves++;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final first = await tester.startGesture(const Offset(60, 60), pointer: 1);
+    await first.moveBy(const Offset(30, 20));
+    await first.moveBy(const Offset(30, 20));
+    expect(overlayMoves, greaterThan(0));
+    expect(controller.offset, Offset.zero);
+    final movesBeforeNavigation = overlayMoves;
+    final second = await tester.startGesture(
+      const Offset(400, 300),
+      pointer: 2,
+    );
+    expect(navigating, isTrue);
+    await first.moveBy(const Offset(20, 10));
+    await second.moveBy(const Offset(40, 20));
+    expect(controller.offset, isNot(Offset.zero));
+    expect(overlayMoves, movesBeforeNavigation);
+    await second.up();
+    await first.up();
+    expect(navigating, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
   testWidgets('two-finger ownership precedes raw delivery and transforms', (
     tester,
   ) async {
