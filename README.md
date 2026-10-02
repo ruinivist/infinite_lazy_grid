@@ -113,6 +113,54 @@ await controller.animateToOffsetAndScale(
 Drag scrolling has inertia by default. Set `inertiaEnabled: false` to disable
 it, or adjust `inertiaFrictionCoefficient` to tune how quickly it settles.
 
+### Touch navigation and application tools
+
+`LazyCanvas` defaults to one-finger touch navigation. For an editor where one
+finger draws or moves an object, use `TouchNavigationMode.twoFinger`. Two or
+more fingers then pan and pinch-zoom; stylus input stays available to tools.
+Mouse navigation is controlled separately by `mousePanButtons`, and trackpad
+and wheel navigation remain available in either touch mode.
+
+The ownership callback fires synchronously when the second finger lands,
+before the controller's raw down callback or any canvas transform. Cancel the
+unfinished tool operation without committing it, and suppress tool input
+while navigation owns the sequence:
+
+```dart
+bool touchNavigationActive = false;
+
+void onToolPointerDown(PointerDownEvent event) {
+  if (touchNavigationActive) return;
+  // Start the application's tool operation.
+}
+
+LazyCanvas(
+  controller: controller,
+  touchNavigationMode: TouchNavigationMode.twoFinger,
+  mousePanButtons: kSecondaryMouseButton | kMiddleMouseButton,
+  onTouchNavigationChanged: (active) {
+    touchNavigationActive = active;
+    if (active) {
+      // Discard the unfinished tool operation; clear its preview/pointer.
+    }
+  },
+);
+```
+
+Apply the same guard to tool move/up handlers and child drag callbacks. Raw
+pointer events still arrive, and child gesture recognizers are not canceled
+automatically. Navigation can take over even after a child has won a drag.
+
+When fewer than two fingers remain, the canvas freezes and ownership remains
+active until **all** touches release or cancel. Adding another finger during
+this release period does not restart navigation. No inertia starts at the end
+of this two-finger sequence. Changing the mode during a touch sequence takes
+effect on the next sequence.
+
+The first touch stops existing viewport animation. Call
+`controller.stopAnimation()` to stop inertia or an animated transition
+explicitly without changing the current viewport.
+
 ### Background options
 
 ```dart

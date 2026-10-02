@@ -121,7 +121,7 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Set the ticker provider for animations.
   void setTickerProvider(TickerProvider? ticker) {
-    if (ticker == null) _stopAnimation();
+    if (ticker == null) stopAnimation();
     _ticker = ticker;
   }
 
@@ -290,7 +290,7 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Called when a scale gesture starts.
   void onScaleStart(ScaleStartDetails details) {
-    _stopAnimation();
+    stopAnimation();
     _baseScale = _scale;
     _scaledDuringGesture = false;
   }
@@ -304,12 +304,12 @@ class LazyCanvasController with ChangeNotifier {
 
     // scale + offset => scale then offset
 
-    if (details.scale != 1) {
+    final newScale = _baseScale * details.scale;
+    if (newScale != _scale) {
       _scaledDuringGesture = true;
-      final newScale = _baseScale * details.scale;
       _gsTopLeftOffset = newGsTopLeftOnScaling(
         _gsTopLeftOffset,
-        details.localFocalPoint,
+        details.localFocalPoint - details.focalPointDelta,
         _scale,
         newScale,
       );
@@ -332,7 +332,7 @@ class LazyCanvasController with ChangeNotifier {
     final speed = velocity.distance;
     if (speed < kMinFlingVelocity) return;
 
-    _stopAnimation();
+    stopAnimation();
     final direction = velocity / speed;
     var lastPosition = 0.0;
     final animation = AnimationController.unbounded(vsync: _ticker!);
@@ -350,14 +350,14 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Scroll the viewport by a screen-space pointer delta.
   void scrollBy(Offset screenDelta) {
-    _stopAnimation();
+    stopAnimation();
     _gsTopLeftOffset += screenDelta / _scale;
     markDirty();
   }
 
   /// Increment or decrement the scale by an additive delta value.
   void updateScalebyDelta(double delta, {Offset? focalPoint}) {
-    _stopAnimation();
+    stopAnimation();
     // added focalPoint param
     focalPoint ??= Offset(canvasSize.width / 2, canvasSize.height / 2);
     final newScale = _scale + delta;
@@ -484,7 +484,7 @@ class LazyCanvasController with ChangeNotifier {
         scale: _scale,
       );
     } else {
-      _stopAnimation();
+      stopAnimation();
       _gsTopLeftOffset = newGsTopLeft;
       markDirty();
     }
@@ -555,7 +555,7 @@ class LazyCanvasController with ChangeNotifier {
         scale: newScale,
       );
     } else {
-      _stopAnimation();
+      stopAnimation();
       _gsTopLeftOffset = newGsTopLeft;
       _scale = newScale;
       markDirty();
@@ -571,7 +571,7 @@ class LazyCanvasController with ChangeNotifier {
     Duration? duration,
     Curve curve = Curves.easeInOut,
   }) async {
-    _stopAnimation();
+    stopAnimation();
     final anim = AnimationController(
       vsync: _ticker!,
       duration: duration ?? defaultAnimationDuration,
@@ -600,13 +600,14 @@ class LazyCanvasController with ChangeNotifier {
     }
   }
 
-  void _stopAnimation() {
+  /// Stops inertia or an animated viewport transition at its current position.
+  void stopAnimation() {
     final animation = _activeAnimation;
     _activeAnimation = null;
     animation?.dispose();
   }
 
   void _disposeAnimation(AnimationController animation) {
-    if (_activeAnimation == animation) _stopAnimation();
+    if (_activeAnimation == animation) stopAnimation();
   }
 }
