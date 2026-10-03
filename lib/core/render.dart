@@ -469,51 +469,51 @@ class _CanvasRenderBox extends RenderBox
   void paint(PaintingContext context, Offset canvasStartOffset) {
     assert(childCount == _childInfos.length);
 
-    // Clip to bounds before any painting, due to extent cache you may get the point ouside bounds
-    context.canvas.save();
-    context.canvas.clipRect(canvasStartOffset & size);
+    // Clip composited child layers too, so they cannot paint outside the canvas viewport.
+    context.pushClipRect(needsCompositing, canvasStartOffset, Offset.zero & size, (
+      context,
+      _,
+    ) {
+      // use the canvas background painter, pass it the canvas and that should handle drawing the background
+      _canvasBackground.paint(
+        context.canvas,
+        canvasStartOffset,
+        _gridSpaceOffset,
+        _scale,
+        size,
+      );
 
-    // use the canvas background painter, pass it the canvas and that should handle drawing the background
-    _canvasBackground.paint(
-      context.canvas,
-      canvasStartOffset,
-      _gridSpaceOffset,
-      _scale,
-      size,
-    );
+      // though using ssPositionns here directly worked for me but docs using the parentData
+      // to get this info is the convention as child can be reordered ( though this will always
+      // change the offset as well so should work for me ) and this is the flutter way of implementation
+      // on most other stuff ( single source of truth for paint & hit test etc )
+      RenderBox? child = firstChild;
+      while (child != null) {
+        final _CanvasWidgetParentData childParentData =
+            child.parentData! as _CanvasWidgetParentData;
 
-    // though using ssPositionns here directly worked for me but docs using the parentData
-    // to get this info is the convention as child can be reordered ( though this will always
-    // change the offset as well so should work for me ) and this is the flutter way of implementation
-    // on most other stuff ( single source of truth for paint & hit test etc )
-    RenderBox? child = firstChild;
-    while (child != null) {
-      final _CanvasWidgetParentData childParentData =
-          child.parentData! as _CanvasWidgetParentData;
+        final drawAt = canvasStartOffset + childParentData.offset;
 
-      final drawAt = canvasStartOffset + childParentData.offset;
+        // Apply transformation using pushTransform for proper coordinate handling
+        final transform = Matrix4.identity()
+          ..translateByDouble(drawAt.dx, drawAt.dy, 0.0, 1.0)
+          ..scaleByDouble(_scale, _scale, 1.0, 1.0);
 
-      // Apply transformation using pushTransform for proper coordinate handling
-      final transform = Matrix4.identity()
-        ..translateByDouble(drawAt.dx, drawAt.dy, 0.0, 1.0)
-        ..scaleByDouble(_scale, _scale, 1.0, 1.0);
+        // Note: initially I was using context.canvas.translate and context.canvas.scale
+        // but that doesn't work with say using a SingleChildScrollView inside a child
+        // so using pushTransform is the way to go here
 
-      // Note: initially I was using context.canvas.translate and context.canvas.scale
-      // but that doesn't work with say using a SingleChildScrollView inside a child
-      // so using pushTransform is the way to go here
+        // 0 offset since transform will take care of it
+        context.pushTransform(needsCompositing, Offset.zero, transform, (
+          context,
+          offset,
+        ) {
+          context.paintChild(child!, Offset.zero);
+        });
 
-      // 0 offset since transform will take care of it
-      context.pushTransform(needsCompositing, Offset.zero, transform, (
-        context,
-        offset,
-      ) {
-        context.paintChild(child!, Offset.zero);
-      });
-
-      child = childParentData.nextSibling;
-    }
-
-    context.canvas.restore(); // clip restore
+        child = childParentData.nextSibling;
+      }
+    });
   }
 
   @override

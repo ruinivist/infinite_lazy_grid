@@ -1,7 +1,10 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
@@ -71,6 +74,71 @@ Future<void> _drag(
 }
 
 void main() {
+  testWidgets('clips composited children at a shifted and scaled viewport', (
+    tester,
+  ) async {
+    final controller = LazyCanvasController(background: const NoBackground());
+    final captureKey = GlobalKey();
+    controller.addChild(
+      const Offset(-10, 0),
+      const RepaintBoundary(
+        child: ColoredBox(
+          color: Colors.red,
+          child: SizedBox(width: 100, height: 60),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RepaintBoundary(
+          key: captureKey,
+          child: ColoredBox(
+            color: Colors.white,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 40, top: 30),
+                child: SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: LazyCanvas(controller: controller),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.updateScalebyDelta(1, focalPoint: Offset.zero);
+    await tester.pumpAndSettle();
+
+    final capture =
+        captureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final pixels = await tester.runAsync(() async {
+      final image = await capture.toImage(pixelRatio: 1);
+      try {
+        return await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      } finally {
+        image.dispose();
+      }
+    });
+    Color pixelAt(int x, int y) {
+      final offset = (y * capture.size.width.toInt() + x) * 4;
+      return Color.fromARGB(
+        pixels!.getUint8(offset + 3),
+        pixels.getUint8(offset),
+        pixels.getUint8(offset + 1),
+        pixels.getUint8(offset + 2),
+      );
+    }
+
+    expect(pixelAt(50, 50).toARGB32(), Colors.red.toARGB32());
+    expect(pixelAt(30, 50).toARGB32(), Colors.white.toARGB32());
+    expect(pixelAt(150, 50).toARGB32(), Colors.white.toARGB32());
+    expect(pixelAt(50, 140).toARGB32(), Colors.white.toARGB32());
+  });
+
   testWidgets('composed overlays share the viewport touch region', (
     tester,
   ) async {
