@@ -1,4 +1,4 @@
-part of 'controller.dart';
+part of 'render.dart';
 
 class _Debug extends StatelessWidget {
   final CanvasChildId id;
@@ -10,7 +10,6 @@ class _Debug extends StatelessWidget {
     required this.gs,
     required this.ss,
     required this.child,
-    required super.key,
   });
 
   @override

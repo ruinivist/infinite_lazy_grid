@@ -6,6 +6,8 @@ import '../utils/styles.dart';
 import 'background.dart';
 import 'controller/controller.dart';
 
+part 'debug.dart';
+
 /// Determines whether a touch drag navigates or remains available to app tools.
 enum TouchNavigationMode { oneFinger, twoFinger }
 
@@ -162,7 +164,18 @@ class _LazyCanvasState extends State<LazyCanvas>
           builder: (context, _) {
             final childrenWithPositions = widget.controller
                 .widgetsWithScreenPositions();
-            final children = childrenWithPositions.map((e) => e.child).toList();
+            final children = childrenWithPositions.map((info) {
+              Widget child = info.child;
+              if (widget.controller.debug) {
+                child = _Debug(
+                  id: info.id,
+                  gs: info.gsPosition,
+                  ss: info.ssPosition,
+                  child: child,
+                );
+              }
+              return Container(key: ValueKey<String>(info.id), child: child);
+            }).toList();
             Widget viewport = _CanvasRenderObject(
               childInfos: childrenWithPositions,
               canvasBackground: widget.controller.background,

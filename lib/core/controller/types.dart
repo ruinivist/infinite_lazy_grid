@@ -22,15 +22,28 @@ class _ChildInfo {
   });
 }
 
+/// An immutable child snapshot, available even when the child is culled.
+/// [childSize] is the supplied or last measured layout size in canvas units.
+@immutable
 class ChildInfo {
-  CanvasChildId id;
-  Offset gsPosition;
-  Offset ssPosition;
-  Widget child;
-  ChildInfo({
+  final CanvasChildId id;
+
+  /// Top-left in canvas/grid coordinates.
+  final Offset gsPosition;
+
+  /// Top-left in viewport/screen coordinates, including pan and zoom.
+  final Offset ssPosition;
+
+  final Size? childSize;
+
+  /// The widget supplied by the caller, without renderer wrappers.
+  final Widget child;
+
+  const ChildInfo({
     required this.id,
     required this.gsPosition,
     required this.ssPosition,
+    required this.childSize,
     required this.child,
   });
 }

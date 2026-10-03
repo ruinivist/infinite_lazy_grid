@@ -1000,7 +1000,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    controller.updatePosition(id, const Offset(500, 0));
+    controller.update(id, position: const Offset(500, 0));
     await tester.pump();
 
     expect(find.byType(TestChild), findsNothing);

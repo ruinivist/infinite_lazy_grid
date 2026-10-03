@@ -33,7 +33,7 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
       SelfManagedCounterWidget(label: "Self-Managed"),
     );
 
-    // Approach 2: Using updateChildWidget, you need this since the children dep tree is direcly managed by the controller
+    // Approach 2: Using update, you need this since the children dep tree is direcly managed by the controller
     externalDataId = controller.addChild(
       const Offset(200, 0),
       ExternalDataWidget(
@@ -81,9 +81,9 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
       selectedColor = Colors.primaries[counter % Colors.primaries.length];
     });
 
-    controller.updateChildWidget(
+    controller.update(
       externalDataId,
-      ExternalDataWidget(
+      widget: ExternalDataWidget(
         counter: counter,
         message: message,
         color: selectedColor,
@@ -116,7 +116,7 @@ class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
                   '1. Self-managed StatefulWidget (left), loses state on unmount',
                 ),
                 const Text(
-                  '2. External data + updateChildWidget (center) - manual updates',
+                  '2. External data + update (center) - manual updates',
                 ),
                 const Text(
                   '3. ValueListenableBuilder (right) - reactive updates',

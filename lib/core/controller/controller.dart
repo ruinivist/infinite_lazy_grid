@@ -8,11 +8,9 @@ import 'package:infinite_lazy_grid/core/background.dart';
 import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
 import '../../utils/conversions.dart';
-import '../../utils/styles.dart';
 import '../render.dart';
 import 'package:uuid/uuid.dart';
 
-part 'debug.dart';
 part 'types.dart';
 
 /// Controller for [LazyCanvas]
@@ -166,11 +164,12 @@ class LazyCanvasController with ChangeNotifier {
     Size? childSize,
     CanvasChildId? id,
   }) {
+    _validateGeometry(position: position, childSize: childSize);
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
     _children[id] = _ChildInfo(
       gsPosition: position,
-      widget: Container(key: ValueKey<String>(id), child: widget),
+      widget: widget,
       lastRenderedSize: childSize,
       paintOrder: _nextPaintOrder++,
     );
@@ -185,6 +184,9 @@ class LazyCanvasController with ChangeNotifier {
     List<CanvasChildArgs> children, {
     CanvasChildId? focusOnBuild,
   }) {
+    for (final child in children) {
+      _validateGeometry(position: child.position, childSize: child.childSize);
+    }
     final ids = <CanvasChildId>[];
     for (final child in children) {
       ids.add(
@@ -231,61 +233,108 @@ class LazyCanvasController with ChangeNotifier {
     markDirty();
   }
 
-  /// Update the position of a child by its ID.
-  CanvasChildId updatePosition(CanvasChildId id, Offset newPosition) {
-    _updateChildPosition(id, newPosition);
-    markDirty();
-    return id;
+  /// Read a snapshot without building or laying out the child.
+  ChildInfo getInfo(CanvasChildId id) {
+    final child = _requireChild(id);
+    return ChildInfo(
+      id: id,
+      gsPosition: child.gsPosition,
+      ssPosition: gsToSs(child.gsPosition, _gsTopLeftOffset, _scale),
+      childSize: child.lastRenderedSize,
+      child: child.widget,
+    );
   }
 
-  /// Move a child by [gridDelta] in canvas/grid coordinates, not screen coordinates.
-  /// Returns the child ID.
+  /// Apply supplied fields atomically. Null fields leave existing values unchanged.
+  /// Returns whether anything changed; changed updates notify exactly once.
+  bool update(
+    CanvasChildId id, {
+    Offset? position,
+    Size? childSize,
+    Widget? widget,
+  }) {
+    final child = _requireChild(id);
+    _validateGeometry(position: position, childSize: childSize);
+    final changed = _updateChild(
+      child,
+      id,
+      position: position,
+      childSize: childSize,
+      widget: widget,
+    );
+    if (changed) markDirty();
+    return changed;
+  }
+
+  /// Move a child by [gridDelta] in canvas coordinates. Returns the child ID.
   CanvasChildId moveChildBy(CanvasChildId id, Offset gridDelta) {
-    final child = _children[id];
-    if (child == null) {
-      throw _ChildNotFoundException;
-    }
-    _updateChildPosition(id, child.gsPosition + gridDelta);
-    markDirty();
+    update(id, position: _requireChild(id).gsPosition + gridDelta);
     return id;
   }
 
-  /// Move children by [gridDelta] in canvas/grid coordinates, not screen coordinates.
+  /// Move unique children together, validating every resulting position first.
   void moveChildrenBy(Iterable<CanvasChildId> ids, Offset gridDelta) {
-    final uniqueIds = ids.toSet();
-    for (final id in uniqueIds) {
-      if (!_children.containsKey(id)) {
-        throw _ChildNotFoundException;
-      }
+    _validateGeometry(position: gridDelta);
+    final positions = <CanvasChildId, Offset>{};
+    for (final id in ids.toSet()) {
+      final position = _requireChild(id).gsPosition + gridDelta;
+      _validateGeometry(position: position);
+      positions[id] = position;
     }
-    for (final id in uniqueIds) {
-      _updateChildPosition(id, _children[id]!.gsPosition + gridDelta);
+    var changed = false;
+    for (final entry in positions.entries) {
+      changed =
+          _updateChild(
+            _children[entry.key]!,
+            entry.key,
+            position: entry.value,
+          ) ||
+          changed;
     }
-    if (uniqueIds.isNotEmpty) markDirty();
+    if (changed) markDirty();
   }
 
-  void _updateChildPosition(CanvasChildId id, Offset newPosition) {
-    final child = _children[id];
-    if (child == null) {
-      throw _ChildNotFoundException;
-    }
-    final oldPosition = child.gsPosition;
-    _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
-    child.gsPosition = newPosition;
-    _spatialHash.add(Point(newPosition.dx, newPosition.dy), id);
-  }
+  _ChildInfo _requireChild(CanvasChildId id) =>
+      _children[id] ?? (throw _ChildNotFoundException);
 
-  /// Update a child's widget.
-  void updateChildWidget(CanvasChildId id, Widget newWidget) {
-    if (_children.containsKey(id)) {
-      _children[id]!.widget = Container(
-        key: ValueKey<String>(id),
-        child: newWidget,
+  void _validateGeometry({Offset? position, Size? childSize}) {
+    if (position != null && (!position.dx.isFinite || !position.dy.isFinite)) {
+      throw ArgumentError.value(position, 'position', 'Must be finite');
+    }
+    if (childSize != null &&
+        (!childSize.width.isFinite ||
+            !childSize.height.isFinite ||
+            childSize.width < 0 ||
+            childSize.height < 0)) {
+      throw ArgumentError.value(
+        childSize,
+        'childSize',
+        'Must be finite and nonnegative',
       );
-      markDirty();
-    } else {
-      throw _ChildNotFoundException;
     }
+  }
+
+  bool _updateChild(
+    _ChildInfo child,
+    CanvasChildId id, {
+    Offset? position,
+    Size? childSize,
+    Widget? widget,
+  }) {
+    final positionChanged = position != null && position != child.gsPosition;
+    final sizeChanged =
+        childSize != null && childSize != child.lastRenderedSize;
+    final widgetChanged = widget != null && widget != child.widget;
+    if (!positionChanged && !sizeChanged && !widgetChanged) return false;
+    if (positionChanged) {
+      final oldPosition = child.gsPosition;
+      _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
+      child.gsPosition = position;
+      _spatialHash.add(Point(position.dx, position.dy), id);
+    }
+    child.lastRenderedSize = childSize ?? child.lastRenderedSize;
+    child.widget = widget ?? child.widget;
+    return true;
   }
 
   /// Called when a scale gesture starts.
@@ -418,26 +467,7 @@ class LazyCanvasController with ChangeNotifier {
     }
     _renderedWidgets = idsToBuild.toSet();
 
-    return _lastRenderedWidgets = idsToBuild.map((id) {
-      final item = _children[id]!;
-      final ssPosition = gsToSs(item.gsPosition, _gsTopLeftOffset, _scale);
-      var child = item.widget;
-      if (debug) {
-        child = _Debug(
-          key: ValueKey<String>(id),
-          id: id,
-          gs: item.gsPosition,
-          ss: ssPosition,
-          child: child,
-        );
-      }
-      return ChildInfo(
-        id: id,
-        gsPosition: item.gsPosition,
-        ssPosition: ssPosition,
-        child: child,
-      );
-    }).toList();
+    return _lastRenderedWidgets = idsToBuild.map(getInfo).toList();
   }
 
   List<CanvasChildId> _childrenWithinBuildArea(Offset center, Offset extent) {

@@ -199,8 +199,12 @@ LazyCanvasController(
 Since the args aren't directly available for you to place in the build tree, child rebuilds can be handled in three ways:
 
 1. Stateful widget child: Child handles its own updates but state is lost when unmounted.
-2. Manual update: `updateChildWidget(id, newWidget)`.
+2. Manual update: `update(id, widget: newWidget)`.
 3. Child listens to external state: Some `Listenable` or a state management library like Provider, etc., that rebuilds the child when data changes.
+
+`getInfo(id)` returns an immutable snapshot of a child's position, widget and supplied or last-measured size, even when culled.
+
+`update(id, position: position, childSize: size)` can update geometry too. Supplied fields apply together; omitted or null fields stay unchanged. Returns whether anything changed.
 
 ### Size based optimisations
 
