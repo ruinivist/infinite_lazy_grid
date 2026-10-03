@@ -524,6 +524,7 @@ class LazyCanvasController with ChangeNotifier {
   /// If it's already rendered, size will be picked up from the child widget. If not
   /// an offstage rendering will be used ( double render )
   /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
+  /// Fits both viewport dimensions and centers using the resulting scale.
   void focusOnChild(
     CanvasChildId id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
@@ -533,11 +534,7 @@ class LazyCanvasController with ChangeNotifier {
     Size? childSize,
     forceRedraw = false,
   }) {
-    if (!_children.containsKey(id)) {
-      throw _ChildNotFoundException;
-    }
-
-    final childInfo = _children[id]!;
+    final childInfo = _requireChild(id);
 
     // try to figure out the size, take from render cache if available
     // else do an offstage render
@@ -545,15 +542,19 @@ class LazyCanvasController with ChangeNotifier {
         ? childInfo.lastRenderedSize
         : measureWidgetSize(_context, childInfo.widget);
 
+    _validateGeometry(childSize: childSize);
+    _updateChild(childInfo, id, childSize: childSize);
+    _markDirty = true;
+
     /*
-    margin is symmatric on ltrb so
+    margin is symmetric on ltrb so
     2mx + cx = screenWidth
     2my + cy = screenHeight
-    where c is child size in screen space and m is margin
+    where c is child size in screen space at newScale and m is margin
+    centering in grid space is childCenter - screenCenter / newScale
     */
 
     double newScale = _scale;
-    Offset newGsTopLeft = _gsTopLeftOffset;
 
     switch (scalingMode) {
       case ScalingMode.keepScale:
@@ -563,20 +564,21 @@ class LazyCanvasController with ChangeNotifier {
         newScale = 1;
       case ScalingMode.fitInViewport:
         // the scale needs to be determined in this case
-        // and hence a margin is needed to constrain on x, to get the scale, we then center it along y
-        newScale =
-            (canvasSize.width - 2 * preferredHorizontalMargin) /
-            childSize!.width;
+        // the horizontal margin constrains x, viewport height constrains y; use the smaller scale
+        final horizontalScale = childSize!.width == 0
+            ? double.infinity
+            : (canvasSize.width - 2 * preferredHorizontalMargin) /
+                  childSize.width;
+        final verticalScale = childSize.height == 0
+            ? double.infinity
+            : canvasSize.height / childSize.height;
+        final fitScale = min(horizontalScale, verticalScale);
+        if (fitScale.isFinite && fitScale > 0) newScale = fitScale;
         break;
     }
 
-    final scaledChildSize = childSize! * scale;
-    final margin =
-        (canvasSize.bottomRight(Offset.zero) -
-            scaledChildSize.bottomRight(Offset.zero)) /
-        (2 * scale);
-    final marginOffset = Offset(max(0, margin.dx), max(0, margin.dy));
-    newGsTopLeft = childInfo.gsPosition - marginOffset;
+    final childCenter = childInfo.gsPosition + childSize!.center(Offset.zero);
+    final newGsTopLeft = childCenter - _ssCenter / newScale;
 
     if (animate) {
       animateToOffsetAndScale(

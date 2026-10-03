@@ -88,7 +88,7 @@ All of these animate by default (`duration` optional, `animate: false` to jump).
 // child specific
 controller.focusOnChild(id);                                   // keep scale
 controller.focusOnChild(id, scalingMode: ScalingMode.resetScale);
-controller.focusOnChild(id, scalingMode: ScalingMode.fitInViewport, preferredHorizontalMargin: 16);
+controller.focusOnChild(id, scalingMode: ScalingMode.fitInViewport, preferredHorizontalMargin: 16); // fit width and height
 
 // absolute position in grid space
 controller.centerOnGridOffset(const Offset(0, 0));
