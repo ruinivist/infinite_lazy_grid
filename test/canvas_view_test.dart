@@ -876,6 +876,66 @@ void main() {
     expect(find.byType(TestChild), findsNothing);
   });
 
+  testWidgets('sets complete order atomically for painting and targeting', (
+    tester,
+  ) async {
+    final controller = LazyCanvasController(useIdsFromArgs: true);
+    var hit = '';
+    for (final id in ['a', 'b', 'c']) {
+      controller.addChild(
+        const Offset(100, 100),
+        GestureDetector(
+          onTap: () => hit = id,
+          child: const SizedBox(
+            width: 100,
+            height: 100,
+            child: ColoredBox(color: Colors.red),
+          ),
+        ),
+        id: id,
+      );
+    }
+    await _pumpCanvas(tester, controller);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    for (final invalid in <List<String>>[
+      ['a', 'b'],
+      ['a', 'a', 'c'],
+      ['a', 'b', 'unknown'],
+    ]) {
+      expect(() => controller.setChildOrder(invalid), throwsArgumentError);
+    }
+    expect(notifications, 0);
+    expect(controller.widgetsWithScreenPositions().map((child) => child.id), [
+      'a',
+      'b',
+      'c',
+    ]);
+    controller.setChildOrder(['c', 'a', 'b']);
+    expect(notifications, 1);
+    await tester.pump();
+    expect(controller.widgetsWithScreenPositions().map((child) => child.id), [
+      'c',
+      'a',
+      'b',
+    ]);
+    await tester.tapAt(const Offset(150, 150));
+    expect(hit, 'b');
+    controller.addChild(
+      const Offset(100, 100),
+      const SizedBox(width: 100, height: 100),
+      id: 'd',
+    );
+    expect(controller.widgetsWithScreenPositions().map((child) => child.id), [
+      'c',
+      'a',
+      'b',
+      'd',
+    ]);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
   testWidgets('brings a child to the front', (WidgetTester tester) async {
     final controller = LazyCanvasController();
     var tapped = -1;

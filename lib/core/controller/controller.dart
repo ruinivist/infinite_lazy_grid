@@ -231,6 +231,21 @@ class LazyCanvasController with ChangeNotifier {
     markDirty();
   }
 
+  /// Sets the complete back-to-front paint and hit-test order atomically.
+  /// Invalid, duplicate, or missing IDs leave the current order untouched.
+  void setChildOrder(List<CanvasChildId> ids) {
+    if (ids.length != _children.length ||
+        ids.toSet().length != ids.length ||
+        ids.any((id) => !_children.containsKey(id))) {
+      throw ArgumentError.value(ids, 'ids', 'Expected every existing ID once');
+    }
+    for (var index = 0; index < ids.length; index++) {
+      _children[ids[index]]!.paintOrder = index;
+    }
+    _nextPaintOrder = ids.length;
+    markDirty();
+  }
+
   /// Update the position of a child by its ID.
   CanvasChildId updatePosition(CanvasChildId id, Offset newPosition) {
     _updateChildPosition(id, newPosition);
