@@ -162,15 +162,10 @@ class _LazyCanvasState extends State<LazyCanvas>
           builder: (context, _) {
             final childrenWithPositions = widget.controller
                 .widgetsWithScreenPositions();
-            final ssPositions = childrenWithPositions
-                .map((e) => e.ssPosition)
-                .toList();
-            final childrenIds = childrenWithPositions.map((e) => e.id).toList();
             final children = childrenWithPositions.map((e) => e.child).toList();
             Widget viewport = _CanvasRenderObject(
-              childrenIds: childrenIds,
+              childInfos: childrenWithPositions,
               canvasBackground: widget.controller.background,
-              ssPositions: ssPositions,
               scale: widget.controller.scale,
               gridSpaceOffset: widget.controller.offset,
               onCanvasSizeChange: widget.controller.onCanvasSizeChange,
@@ -317,8 +312,7 @@ class _MouseScaleGestureRecognizer extends ScaleGestureRecognizer {
 /// A combined widget for all the render object of the children + background.
 /// Everything is in screen space here
 class _CanvasRenderObject extends MultiChildRenderObjectWidget {
-  final List<CanvasChildId> childrenIds;
-  final List<Offset> ssPositions;
+  final List<ChildInfo> childInfos;
   final double scale;
   final Offset gridSpaceOffset;
   final CanvasBackground canvasBackground;
@@ -326,8 +320,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
   final Function onChildSizeChange;
 
   const _CanvasRenderObject({
-    required this.childrenIds,
-    required this.ssPositions,
+    required this.childInfos,
     required this.scale,
     required this.gridSpaceOffset,
     required this.canvasBackground,
@@ -335,16 +328,15 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
     required this.onChildSizeChange,
     required super.children, // children go to the MultiChildRenderObjectWidget
   }) : assert(
-         ssPositions.length == children.length,
-         'Children and positions must have the same length',
+         childInfos.length == children.length,
+         'Children and information must have the same length',
        ),
        assert(scale != 0);
 
   @override
   RenderObject createRenderObject(BuildContext context) {
     return _CanvasRenderBox(
-      childrenIds: childrenIds,
-      ssPositions: ssPositions,
+      childInfos: childInfos,
       scale: scale,
       gridSpaceOffset: gridSpaceOffset,
       canvasBackground: canvasBackground,
@@ -356,8 +348,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
   @override
   void updateRenderObject(BuildContext context, _CanvasRenderBox renderObject) {
     renderObject
-      ..childrenIds = childrenIds
-      ..ssPositions = ssPositions
+      ..childInfos = childInfos
       ..canvasBackground = canvasBackground
       ..gridSpaceOffset = gridSpaceOffset
       ..scale = scale
@@ -376,24 +367,20 @@ class _CanvasRenderBox extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _CanvasWidgetParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _CanvasWidgetParentData> {
   CanvasBackground _canvasBackground;
-  List<CanvasChildId> _childrenIds;
-  List<Offset> _ssPositions;
+  List<ChildInfo> _childInfos;
   Offset _gridSpaceOffset;
   double _scale;
   Function onCanvasSizeChange;
   Function onChildSizeChange;
 
   _CanvasRenderBox({
-    required List<CanvasChildId> childrenIds,
-    required List<Offset> ssPositions,
+    required List<ChildInfo> childInfos,
     required double scale,
     required Offset gridSpaceOffset,
     required CanvasBackground canvasBackground,
     required this.onCanvasSizeChange,
     required this.onChildSizeChange,
-  }) : assert(childrenIds.length == ssPositions.length),
-       _childrenIds = childrenIds,
-       _ssPositions = ssPositions,
+  }) : _childInfos = childInfos,
        _scale = scale,
        _gridSpaceOffset = gridSpaceOffset,
        _canvasBackground = canvasBackground;
@@ -405,19 +392,11 @@ class _CanvasRenderBox extends RenderBox
     }
   }
 
-  set ssPositions(List<Offset> ssPositions) {
-    // at this point childCount may not be equal to ssPositions.length
-    // but since we are only marking for layout this is fine
-    // at the actual performLayout this will be asserted
-    if (_ssPositions != ssPositions) {
-      _ssPositions = ssPositions;
+  set childInfos(List<ChildInfo> childInfos) {
+    // Child count is checked during layout, after the widget updates finish.
+    if (_childInfos != childInfos) {
+      _childInfos = childInfos;
       markNeedsLayout();
-    }
-  }
-
-  set childrenIds(List<CanvasChildId> childrenIds) {
-    if (_childrenIds != childrenIds) {
-      _childrenIds = childrenIds;
     }
   }
 
@@ -464,7 +443,7 @@ class _CanvasRenderBox extends RenderBox
 
   @override
   void performLayout() {
-    assert(childCount == _ssPositions.length);
+    assert(childCount == _childInfos.length);
     size = constraints.biggest; // expand as much as possible for the parent
     onCanvasSizeChange(size); // notify the controller about the size
 
@@ -474,9 +453,9 @@ class _CanvasRenderBox extends RenderBox
     while (child != null) {
       final _CanvasWidgetParentData childParentData =
           child.parentData! as _CanvasWidgetParentData;
-      childParentData.offset = _ssPositions[index];
-      childParentData.id = _childrenIds[index];
-      index++;
+      final info = _childInfos[index++];
+      childParentData.offset = info.ssPosition;
+      childParentData.id = info.id;
       child.layout(constraints.loosen(), parentUsesSize: true);
 
       // notify the controller about the size of the child
@@ -488,7 +467,7 @@ class _CanvasRenderBox extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset canvasStartOffset) {
-    assert(childCount == _ssPositions.length);
+    assert(childCount == _childInfos.length);
 
     // Clip to bounds before any painting, due to extent cache you may get the point ouside bounds
     context.canvas.save();
