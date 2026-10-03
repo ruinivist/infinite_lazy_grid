@@ -18,11 +18,13 @@ void main() {
       final snapshot = controller.getInfo(id);
       expect(snapshot.child, same(original));
       expect(snapshot.childSize, isNull);
+      expect(snapshot.rotation, 0);
       var notifications = 0;
       controller.addListener(() {
         notifications++;
         final info = controller.getInfo(id);
         expect(info.gsPosition, const Offset(30, 40));
+        expect(info.rotation, 0.7);
         expect(info.childSize, const Size(100, 60));
         expect(info.child, same(replacement));
       });
@@ -31,6 +33,7 @@ void main() {
         controller.update(
           id,
           position: const Offset(30, 40),
+          rotation: 0.7,
           childSize: const Size(100, 60),
           widget: replacement,
         ),
@@ -39,13 +42,20 @@ void main() {
       expect(notifications, 1);
       expect(controller.update(id), isFalse);
       expect(
-        controller.update(id, position: null, childSize: null, widget: null),
+        controller.update(
+          id,
+          position: null,
+          rotation: null,
+          childSize: null,
+          widget: null,
+        ),
         isFalse,
       );
       expect(
         controller.update(
           id,
           position: const Offset(30, 40),
+          rotation: 0.7,
           childSize: const Size(100, 60),
           widget: replacement,
         ),
@@ -54,6 +64,7 @@ void main() {
       expect(notifications, 1);
       expect(snapshot.gsPosition, const Offset(10, 20));
       expect(snapshot.ssPosition, const Offset(10, 20));
+      expect(snapshot.rotation, 0);
       expect(snapshot.childSize, isNull);
       expect(snapshot.child, same(original));
     },
@@ -118,6 +129,7 @@ void main() {
         () => controller.update(
           id,
           position: const Offset(30, 40),
+          rotation: 1,
           childSize: size,
           widget: const Text('changed'),
         ),
@@ -132,6 +144,7 @@ void main() {
         () => controller.update(
           id,
           position: position,
+          rotation: 1,
           childSize: Size.zero,
           widget: const Text('changed'),
         ),
@@ -175,6 +188,7 @@ void main() {
     expect(controller.hasChild('valid'), isFalse);
     final info = controller.getInfo(id);
     expect(info.gsPosition, Offset.zero);
+    expect(info.rotation, 0);
     expect(info.childSize, const Size(80, 40));
     expect(info.child, same(original));
     expect(notifications, 0);
@@ -216,7 +230,7 @@ void main() {
   );
 
   testWidgets(
-    'position and compatible widget updates retain child state and focus',
+    'geometry and compatible widget updates retain child state and focus',
     (tester) async {
       final controller = LazyCanvasController(debug: true);
       final focus = FocusNode();
@@ -248,7 +262,7 @@ void main() {
       expect(focus.hasFocus, isTrue);
       final state = tester.state(find.byKey(key));
 
-      controller.update(id, position: const Offset(120, 90));
+      controller.update(id, position: const Offset(120, 90), rotation: 0.7);
       await tester.pump();
       expect(tester.state(find.byKey(key)), same(state));
       final replacement = editor('second', 200);
@@ -259,6 +273,7 @@ void main() {
       expect(text.text, 'draft');
       final info = controller.getInfo(id);
       expect(info.gsPosition, const Offset(120, 90));
+      expect(info.rotation, 0.7);
       expect(info.child, same(replacement));
       expect(info.childSize, const Size(200, 60));
       await tester.pumpWidget(const SizedBox());

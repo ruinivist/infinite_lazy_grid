@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
@@ -12,6 +14,7 @@ class SimpleExample extends StatefulWidget {
 
 class _SimpleExampleState extends State<SimpleExample> {
   late final LazyCanvasController controller;
+  late final CanvasChildId scrollableId;
 
   @override
   void initState() {
@@ -39,7 +42,7 @@ class _SimpleExampleState extends State<SimpleExample> {
       childIds.add(id);
     }
 
-    controller.addChild(
+    scrollableId = controller.addChild(
       const Offset(0, 200),
       Container(
         width: 300,
@@ -71,6 +74,15 @@ class _SimpleExampleState extends State<SimpleExample> {
         mainAxisSize: MainAxisSize.min,
         spacing: 8,
         children: [
+          FloatingActionButton(
+            heroTag: 'app_rotate',
+            tooltip: 'Rotate scrollable child',
+            onPressed: () => controller.update(
+              scrollableId,
+              rotation: controller.getInfo(scrollableId).rotation + pi / 12,
+            ),
+            child: const Icon(Icons.rotate_right),
+          ),
           FloatingActionButton(
             heroTag: 'app_zoom_in',
             onPressed: () {

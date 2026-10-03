@@ -206,7 +206,11 @@ Since the args aren't directly available for you to place in the build tree, chi
 
 `update(id, position: position, childSize: size)` can update geometry too. Supplied fields apply together; omitted or null fields stay unchanged. Returns whether anything changed.
 
+`update(id, rotation: angle)` rotates clockwise in radians around the layout center. `addChild` and `CanvasChildArgs` also accept `rotation` (default `0`); position and layout size stay unchanged.
+
 ### Size based optimisations
+
+Children are culled by their unrotated top-left; `buildExtentMultiplier` controls the mounting buffer.
 
 `focusOnChild` auto measures offstage if size unknown. Provide `childSize` if you already know it to skip the extra pass.
 

@@ -142,16 +142,19 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Add a child at a given position with a widget. Returns the child ID.
   /// You need the child size for optimising the focus on child
+  /// [rotation] is clockwise radians around the layout center.
   CanvasChildId addChild(
     Offset position,
     Widget widget, {
     Size? childSize,
+    double rotation = 0,
     CanvasChildId? id,
   }) {
     final childId = _addChildInternal(
       position,
       widget,
       childSize: childSize,
+      rotation: rotation,
       id: id,
     );
     markDirty();
@@ -162,13 +165,19 @@ class LazyCanvasController with ChangeNotifier {
     Offset position,
     Widget widget, {
     Size? childSize,
+    double rotation = 0,
     CanvasChildId? id,
   }) {
-    _validateGeometry(position: position, childSize: childSize);
+    _validateGeometry(
+      position: position,
+      rotation: rotation,
+      childSize: childSize,
+    );
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
     _children[id] = _ChildInfo(
       gsPosition: position,
+      rotation: rotation,
       widget: widget,
       lastRenderedSize: childSize,
       paintOrder: _nextPaintOrder++,
@@ -185,7 +194,11 @@ class LazyCanvasController with ChangeNotifier {
     CanvasChildId? focusOnBuild,
   }) {
     for (final child in children) {
-      _validateGeometry(position: child.position, childSize: child.childSize);
+      _validateGeometry(
+        position: child.position,
+        rotation: child.rotation,
+        childSize: child.childSize,
+      );
     }
     final ids = <CanvasChildId>[];
     for (final child in children) {
@@ -194,6 +207,7 @@ class LazyCanvasController with ChangeNotifier {
           child.position,
           child.widget,
           childSize: child.childSize,
+          rotation: child.rotation,
           id: child.id,
         ),
       );
@@ -240,6 +254,7 @@ class LazyCanvasController with ChangeNotifier {
       id: id,
       gsPosition: child.gsPosition,
       ssPosition: gsToSs(child.gsPosition, _gsTopLeftOffset, _scale),
+      rotation: child.rotation,
       childSize: child.lastRenderedSize,
       child: child.widget,
     );
@@ -247,18 +262,25 @@ class LazyCanvasController with ChangeNotifier {
 
   /// Apply supplied fields atomically. Null fields leave existing values unchanged.
   /// Returns whether anything changed; changed updates notify exactly once.
+  /// [rotation] is clockwise radians around the layout center.
   bool update(
     CanvasChildId id, {
     Offset? position,
+    double? rotation,
     Size? childSize,
     Widget? widget,
   }) {
     final child = _requireChild(id);
-    _validateGeometry(position: position, childSize: childSize);
+    _validateGeometry(
+      position: position,
+      rotation: rotation,
+      childSize: childSize,
+    );
     final changed = _updateChild(
       child,
       id,
       position: position,
+      rotation: rotation,
       childSize: childSize,
       widget: widget,
     );
@@ -297,9 +319,16 @@ class LazyCanvasController with ChangeNotifier {
   _ChildInfo _requireChild(CanvasChildId id) =>
       _children[id] ?? (throw _ChildNotFoundException);
 
-  void _validateGeometry({Offset? position, Size? childSize}) {
+  void _validateGeometry({
+    Offset? position,
+    double? rotation,
+    Size? childSize,
+  }) {
     if (position != null && (!position.dx.isFinite || !position.dy.isFinite)) {
       throw ArgumentError.value(position, 'position', 'Must be finite');
+    }
+    if (rotation != null && !rotation.isFinite) {
+      throw ArgumentError.value(rotation, 'rotation', 'Must be finite');
     }
     if (childSize != null &&
         (!childSize.width.isFinite ||
@@ -318,14 +347,21 @@ class LazyCanvasController with ChangeNotifier {
     _ChildInfo child,
     CanvasChildId id, {
     Offset? position,
+    double? rotation,
     Size? childSize,
     Widget? widget,
   }) {
     final positionChanged = position != null && position != child.gsPosition;
     final sizeChanged =
         childSize != null && childSize != child.lastRenderedSize;
+    final rotationChanged = rotation != null && rotation != child.rotation;
     final widgetChanged = widget != null && widget != child.widget;
-    if (!positionChanged && !sizeChanged && !widgetChanged) return false;
+    if (!positionChanged &&
+        !sizeChanged &&
+        !rotationChanged &&
+        !widgetChanged) {
+      return false;
+    }
     if (positionChanged) {
       final oldPosition = child.gsPosition;
       _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
@@ -333,6 +369,7 @@ class LazyCanvasController with ChangeNotifier {
       _spatialHash.add(Point(position.dx, position.dy), id);
     }
     child.lastRenderedSize = childSize ?? child.lastRenderedSize;
+    child.rotation = rotation ?? child.rotation;
     child.widget = widget ?? child.widget;
     return true;
   }
@@ -524,7 +561,7 @@ class LazyCanvasController with ChangeNotifier {
   /// If it's already rendered, size will be picked up from the child widget. If not
   /// an offstage rendering will be used ( double render )
   /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
-  /// Fits both viewport dimensions and centers using the resulting scale.
+  /// Fits rotated bounds in both viewport dimensions and centers using the resulting scale.
   void focusOnChild(
     CanvasChildId id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
@@ -546,11 +583,16 @@ class LazyCanvasController with ChangeNotifier {
     _updateChild(childInfo, id, childSize: childSize);
     _markDirty = true;
 
+    final bounds = MatrixUtils.transformRect(
+      childTransform(childInfo.gsPosition, childSize!, childInfo.rotation),
+      Offset.zero & childSize,
+    );
+
     /*
     margin is symmetric on ltrb so
     2mx + cx = screenWidth
     2my + cy = screenHeight
-    where c is child size in screen space at newScale and m is margin
+    where c is rotated bounds size in screen space at newScale and m is margin
     centering in grid space is childCenter - screenCenter / newScale
     */
 
@@ -565,20 +607,18 @@ class LazyCanvasController with ChangeNotifier {
       case ScalingMode.fitInViewport:
         // the scale needs to be determined in this case
         // the horizontal margin constrains x, viewport height constrains y; use the smaller scale
-        final horizontalScale = childSize!.width == 0
+        final horizontalScale = bounds.width == 0
             ? double.infinity
-            : (canvasSize.width - 2 * preferredHorizontalMargin) /
-                  childSize.width;
-        final verticalScale = childSize.height == 0
+            : (canvasSize.width - 2 * preferredHorizontalMargin) / bounds.width;
+        final verticalScale = bounds.height == 0
             ? double.infinity
-            : canvasSize.height / childSize.height;
+            : canvasSize.height / bounds.height;
         final fitScale = min(horizontalScale, verticalScale);
         if (fitScale.isFinite && fitScale > 0) newScale = fitScale;
         break;
     }
 
-    final childCenter = childInfo.gsPosition + childSize!.center(Offset.zero);
-    final newGsTopLeft = childCenter - _ssCenter / newScale;
+    final newGsTopLeft = bounds.center - _ssCenter / newScale;
 
     if (animate) {
       animateToOffsetAndScale(

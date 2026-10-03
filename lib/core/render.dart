@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
 import 'package:flutter/gestures.dart'; // PointerScrollEvent
 import '../utils/styles.dart';
+import '../utils/conversions.dart';
 import 'background.dart';
 import 'controller/controller.dart';
 
@@ -373,6 +374,7 @@ class _CanvasRenderObject extends MultiChildRenderObjectWidget {
 class _CanvasWidgetParentData extends ContainerBoxParentData<RenderBox> {
   // there is already an "offset" defined in BoxParentdata that is exactly what I want
   late CanvasChildId id;
+  double rotation = 0;
 }
 
 class _CanvasRenderBox extends RenderBox
@@ -469,6 +471,7 @@ class _CanvasRenderBox extends RenderBox
       final info = _childInfos[index++];
       childParentData.offset = info.ssPosition;
       childParentData.id = info.id;
+      childParentData.rotation = info.rotation;
       child.layout(constraints.loosen(), parentUsesSize: true);
 
       // notify the controller about the size of the child
@@ -505,23 +508,19 @@ class _CanvasRenderBox extends RenderBox
         final _CanvasWidgetParentData childParentData =
             child.parentData! as _CanvasWidgetParentData;
 
-        final drawAt = canvasStartOffset + childParentData.offset;
-
         // Apply transformation using pushTransform for proper coordinate handling
-        final transform = Matrix4.identity()
-          ..translateByDouble(drawAt.dx, drawAt.dy, 0.0, 1.0)
-          ..scaleByDouble(_scale, _scale, 1.0, 1.0);
+        final transform = _transformFor(child);
 
         // Note: initially I was using context.canvas.translate and context.canvas.scale
         // but that doesn't work with say using a SingleChildScrollView inside a child
         // so using pushTransform is the way to go here
 
-        // 0 offset since transform will take care of it
-        context.pushTransform(needsCompositing, Offset.zero, transform, (
+        // PaintingContext applies the canvas offset around the child transform.
+        context.pushTransform(needsCompositing, canvasStartOffset, transform, (
           context,
           offset,
         ) {
-          context.paintChild(child!, Offset.zero);
+          context.paintChild(child!, offset);
         });
 
         child = childParentData.nextSibling;
@@ -529,17 +528,19 @@ class _CanvasRenderBox extends RenderBox
     });
   }
 
+  Matrix4 _transformFor(RenderBox child) {
+    final data = child.parentData! as _CanvasWidgetParentData;
+    return childTransform(
+      data.offset,
+      child.size,
+      data.rotation,
+      scale: _scale,
+    );
+  }
+
   @override
   void applyPaintTransform(RenderObject child, Matrix4 transform) {
-    final childParentData = child.parentData! as _CanvasWidgetParentData;
-    transform
-      ..translateByDouble(
-        childParentData.offset.dx,
-        childParentData.offset.dy,
-        0.0,
-        1.0,
-      )
-      ..scaleByDouble(_scale, _scale, 1.0, 1.0);
+    transform.multiply(_transformFor(child as RenderBox));
   }
 
   @override
@@ -550,8 +551,8 @@ class _CanvasRenderBox extends RenderBox
           child.parentData! as _CanvasWidgetParentData;
 
       bool isHit;
-      if (_scale == 1.0) {
-        // Fast path: only translated, no scale
+      if (_scale == 1.0 && childParentData.rotation == 0) {
+        // Fast path: only translated, no scale or rotation
         isHit = result.addWithPaintOffset(
           offset: childParentData.offset,
           position: position,
@@ -560,18 +561,9 @@ class _CanvasRenderBox extends RenderBox
           },
         );
       } else {
-        // same paint transform for hit testing when scaled
-        final Matrix4 transform = Matrix4.identity()
-          ..translateByDouble(
-            childParentData.offset.dx,
-            childParentData.offset.dy,
-            0.0,
-            1.0,
-          )
-          ..scaleByDouble(_scale, _scale, 1.0, 1.0);
-
+        // same paint transform for hit testing when scaled or rotated
         isHit = result.addWithPaintTransform(
-          transform: transform,
+          transform: _transformFor(child),
           position: position,
           hitTest: (BoxHitTestResult result, Offset transformed) {
             return child!.hitTest(result, position: transformed);

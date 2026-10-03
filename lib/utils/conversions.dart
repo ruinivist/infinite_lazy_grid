@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'package:flutter/rendering.dart';
 
 /// Convert grid space coordinates to screen space coordinates
 Offset gsToSs(Offset gsPosition, Offset gsTopLeft, double scale) {
@@ -20,4 +20,25 @@ Offset newGsTopLeftOnScaling(
   // we change gsTopLeft to keep ssFocalPoint same as well
   Offset gsFocalPoint = ssToGs(ssFocalPoint, gsTopLeft, oldScale);
   return gsFocalPoint - ssFocalPoint / newScale;
+}
+
+/// Maps local child coordinates to the parent, rotating around the layout center.
+/// Used by painting, pointer targeting, coordinate conversion and focus bounds.
+Matrix4 childTransform(
+  Offset position,
+  Size size,
+  double rotation, {
+  double scale = 1,
+}) {
+  final transform = Matrix4.identity()
+    ..translateByDouble(position.dx, position.dy, 0, 1)
+    ..scaleByDouble(scale, scale, 1, 1);
+  if (rotation != 0) {
+    final center = size.center(Offset.zero);
+    transform
+      ..translateByDouble(center.dx, center.dy, 0, 1)
+      ..rotateZ(rotation)
+      ..translateByDouble(-center.dx, -center.dy, 0, 1);
+  }
+  return transform;
 }
