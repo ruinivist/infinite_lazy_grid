@@ -80,6 +80,24 @@ controller.removeChild(oneChild);
 controller.clear();
 ```
 
+### Arrange children
+
+`childOrder` is an immutable back-to-front snapshot, including culled children.
+Arrange moves IDs as one ordered bundle, ignoring duplicates.
+
+```dart
+final targets = [firstId, secondId];
+controller.canArrange(targets, CanvasArrange.forward); // Check availability.
+controller.bringForward(targets); // Cross the nearest overlap above the bundle.
+controller.sendBackward(targets); // Cross the nearest overlap below the bundle.
+controller.bringToFront(targets);
+controller.sendToBack(targets);
+```
+
+Commands validate all IDs, return whether order changed, and notify once on change.
+`canArrange` only checks. Forward/backward use rotated footprints and require
+supplied or cached sizes, throwing `StateError` if unknown. Front/back need no sizes.
+
 ### Focus / center
 
 All of these animate by default (`duration` optional, `animate: false` to jump).

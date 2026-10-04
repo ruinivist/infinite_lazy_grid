@@ -56,6 +56,9 @@ class ChildInfo {
 
 enum ScalingMode { resetScale, keepScale, fitInViewport }
 
+/// Stack operations for an ordered bundle of canvas children.
+enum CanvasArrange { forward, backward, front, back }
+
 typedef CanvasChildId = String;
 
 // listener callbacks

@@ -241,7 +241,7 @@ void main() {
       back,
       front,
     ]);
-    controller.bringToFront(back);
+    controller.bringToFront([back]);
     await tester.pumpAndSettle();
     hits.clear();
     await tester.tapAt(const Offset(150, 90));

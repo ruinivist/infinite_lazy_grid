@@ -968,7 +968,7 @@ void main() {
     await tester.tapAt(const Offset(10, 10));
     expect(tapped, 1);
 
-    controller.bringToFront(firstId);
+    controller.bringToFront([firstId]);
     await tester.pump();
     expect(controller.widgetsWithScreenPositions().map((child) => child.id), [
       secondId,

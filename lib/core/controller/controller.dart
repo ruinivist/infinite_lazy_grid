@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
@@ -91,6 +92,13 @@ class LazyCanvasController with ChangeNotifier {
       _scale *
       buildExtentMultiplier;
   CanvasBackground get background => _background;
+
+  /// Immutable back-to-front snapshot of all children, including culled children.
+  List<CanvasChildId> get childOrder => List.unmodifiable(
+    _children.keys.toList()..sort(
+      (a, b) => _children[a]!.paintOrder.compareTo(_children[b]!.paintOrder),
+    ),
+  );
 
   set background(CanvasBackground value) {
     if (identical(_background, value)) return;
@@ -237,15 +245,105 @@ class LazyCanvasController with ChangeNotifier {
     markDirty();
   }
 
-  /// Paint and hit test this child above all other children.
-  void bringToFront(CanvasChildId id) {
-    final child = _children[id];
-    if (child == null) {
-      throw _ChildNotFoundException;
+  // ==================== Child Ordering ====================
+
+  /// Checks whether [action] would change order, without notifying or mutating.
+  /// Targets are deduplicated and all IDs are validated, as in the commands.
+  /// Forward/backward throw [StateError] if a required layout size is unknown.
+  bool canArrange(Iterable<CanvasChildId> ids, CanvasArrange action) =>
+      _arrangedOrder(ids, action) != null;
+
+  /// Moves the bundle above the nearest overlapping unselected child above it.
+  /// Preserves target and non-target relative order; see [canArrange] for errors.
+  bool bringForward(Iterable<CanvasChildId> ids) =>
+      _arrange(ids, CanvasArrange.forward);
+
+  /// Moves the bundle below the nearest overlapping unselected child below it.
+  /// Preserves target and non-target relative order; see [canArrange] for errors.
+  bool sendBackward(Iterable<CanvasChildId> ids) =>
+      _arrange(ids, CanvasArrange.backward);
+
+  /// Paints and hit tests the ordered bundle above all other children.
+  /// Returns whether order changed; changed commands notify exactly once.
+  bool bringToFront(Iterable<CanvasChildId> ids) =>
+      _arrange(ids, CanvasArrange.front);
+
+  /// Paints and hit tests the ordered bundle below all other children.
+  /// Returns whether order changed; changed commands notify exactly once.
+  bool sendToBack(Iterable<CanvasChildId> ids) =>
+      _arrange(ids, CanvasArrange.back);
+
+  bool _arrange(Iterable<CanvasChildId> ids, CanvasArrange action) {
+    final order = _arrangedOrder(ids, action);
+    if (order == null) return false;
+    for (var index = 0; index < order.length; index++) {
+      _children[order[index]]!.paintOrder = index;
     }
-    child.paintOrder = _nextPaintOrder++;
+    _nextPaintOrder = order.length;
     markDirty();
+    return true;
   }
+
+  List<CanvasChildId>? _arrangedOrder(
+    Iterable<CanvasChildId> ids,
+    CanvasArrange action,
+  ) {
+    final targets = ids.toSet();
+    for (final id in targets) {
+      _requireChild(id);
+    }
+    if (targets.isEmpty) return null;
+    final order = childOrder;
+    final bundle = order.where(targets.contains).toList();
+    final others = order.where((id) => !targets.contains(id)).toList();
+    var insertion = action == CanvasArrange.front ? others.length : 0;
+    if (action == CanvasArrange.forward || action == CanvasArrange.backward) {
+      final forward = action == CanvasArrange.forward;
+      final step = forward ? 1 : -1;
+      final boundary = order.indexOf(forward ? bundle.last : bundle.first);
+      if (boundary + step < 0 || boundary + step >= order.length) return null;
+      final footprints = bundle.map(_childFootprint).toList();
+      CanvasChildId? crossed;
+      for (
+        var index = boundary + step;
+        index >= 0 && index < order.length;
+        index += step
+      ) {
+        final candidate = order[index];
+        if (targets.contains(candidate)) continue;
+        final footprint = _childFootprint(candidate);
+        if (footprints.any(
+          (path) =>
+              path.getBounds().overlaps(footprint.getBounds()) &&
+              !Path.combine(
+                PathOperation.intersect,
+                path,
+                footprint,
+              ).getBounds().isEmpty,
+        )) {
+          crossed = candidate;
+          break;
+        }
+      }
+      if (crossed == null) return null;
+      insertion = others.indexOf(crossed) + (forward ? 1 : 0);
+    }
+    final result = others..insertAll(insertion, bundle);
+    return listEquals(order, result) ? null : result;
+  }
+
+  Path _childFootprint(CanvasChildId id) {
+    final child = _children[id]!;
+    final size = child.lastRenderedSize;
+    if (size == null) {
+      throw StateError('Layout size is unknown for child "$id"');
+    }
+    return (Path()..addRect(Offset.zero & size)).transform(
+      childTransform(child.gsPosition, size, child.rotation).storage,
+    );
+  }
+
+  // ==================== Child Updates ====================
 
   /// Read a snapshot without building or laying out the child.
   ChildInfo getInfo(CanvasChildId id) {
