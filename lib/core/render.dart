@@ -18,6 +18,10 @@ class LazyCanvas extends StatefulWidget {
   final LazyCanvasController controller;
   final int mousePanButtons;
 
+  /// Temporarily paints and targets this child above the document stack.
+  /// Does not change controller order or remount keyed child state.
+  final CanvasChildId? foregroundChildId;
+
   /// Selects touch navigation for the next sequence; defaults to one finger.
   final TouchNavigationMode touchNavigationMode;
 
@@ -36,6 +40,7 @@ class LazyCanvas extends StatefulWidget {
   const LazyCanvas({
     required this.controller,
     this.mousePanButtons = kPrimaryMouseButton,
+    this.foregroundChildId,
     this.touchNavigationMode = TouchNavigationMode.oneFinger,
     this.onTouchNavigationChanged,
     this.viewportBuilder,
@@ -163,8 +168,17 @@ class _LazyCanvasState extends State<LazyCanvas>
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (context, _) {
-            final childrenWithPositions = widget.controller
-                .widgetsWithScreenPositions();
+            final childrenWithPositions = List<ChildInfo>.of(
+              widget.controller.widgetsWithScreenPositions(),
+            );
+            final foregroundIndex = childrenWithPositions.indexWhere(
+              (info) => info.id == widget.foregroundChildId,
+            );
+            if (foregroundIndex >= 0) {
+              childrenWithPositions.add(
+                childrenWithPositions.removeAt(foregroundIndex),
+              );
+            }
             final children = childrenWithPositions.map((info) {
               Widget child = info.child;
               if (widget.controller.debug) {

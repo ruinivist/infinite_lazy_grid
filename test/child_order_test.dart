@@ -42,6 +42,7 @@ Future<void> pumpCanvas(
   WidgetTester tester,
   LazyCanvasController controller, {
   GlobalKey? captureKey,
+  CanvasChildId? foregroundChildId,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -52,6 +53,7 @@ Future<void> pumpCanvas(
           height: 300,
           child: LazyCanvas(
             controller: controller,
+            foregroundChildId: foregroundChildId,
             mousePanButtons: kSecondaryMouseButton,
             viewportBuilder: captureKey == null
                 ? null
@@ -292,7 +294,7 @@ void main() {
   );
 
   testWidgets(
-    'Arrange changes painting and pointer targets while retaining child state',
+    'foreground and Arrange preserve state with matching paint and hit order',
     (tester) async {
       final controller = LazyCanvasController(background: const NoBackground());
       final captureKey = GlobalKey();
@@ -364,6 +366,30 @@ void main() {
       }
 
       await expectTop('b', Colors.blue);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      for (final (foreground, top, color) in [
+        (a, 'a', Colors.red),
+        (b, 'b', Colors.blue),
+        ('missing', 'b', Colors.blue),
+        (a, 'a', Colors.red),
+        (null, 'b', Colors.blue),
+      ]) {
+        await pumpCanvas(
+          tester,
+          controller,
+          captureKey: captureKey,
+          foregroundChildId: foreground,
+        );
+        await expectTop(top, color);
+        expect(controller.childOrder, [a, b]);
+        expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+          a,
+          b,
+        ]);
+        expect(notifications, 0);
+        expect(controller.canArrange([a], CanvasArrange.forward), isTrue);
+      }
       for (final (action, id, color) in [
         (CanvasArrange.forward, 'a', Colors.red),
         (CanvasArrange.backward, 'b', Colors.blue),
@@ -374,7 +400,7 @@ void main() {
         await tester.pumpAndSettle();
         await expectTop(id, color);
       }
-      expect(count, 2);
+      expect(count, 4);
       for (final snapshot in snapshots) {
         final info = controller.getInfo(snapshot.id);
         expect(info.gsPosition, snapshot.gsPosition);
