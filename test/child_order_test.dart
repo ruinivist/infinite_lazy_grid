@@ -1,4 +1,4 @@
-// Verifies bundle ordering and atomic Arrange commands.
+// Verifies stack restoration, foreground lifting and atomic Arrange commands.
 // Exercises the public controller and Flutter paint, pointer and state flows.
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -70,6 +70,74 @@ Future<void> pumpCanvas(
 // ---------- Ordering and validation ----------
 
 void main() {
+  test('restoration validates atomically and notifies only for changes', () {
+    final controller = LazyCanvasController();
+    addTearDown(controller.dispose);
+    addChild(controller, 'a', rotation: pi / 4);
+    addChild(controller, 'unknown-size', size: null);
+    addChild(controller, 'culled', position: const Offset(5000, 5000));
+    final snapshots = controller.childOrder.map(controller.getInfo).toList();
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    for (final ids in [
+      <String>[],
+      ['a', 'culled'],
+      ['a', 'a', 'culled'],
+      ['a', 'missing', 'culled'],
+      ['a', 'unknown-size', 'culled', 'extra'],
+    ]) {
+      expect(() => controller.setChildOrder(ids), throwsArgumentError);
+      expect(controller.childOrder, ['a', 'unknown-size', 'culled']);
+      expect(notifications, 0);
+    }
+    controller.setChildOrder(controller.childOrder);
+    expect(notifications, 0);
+    final restored = ['culled', 'unknown-size', 'a'];
+    controller.setChildOrder(restored);
+    expect(controller.childOrder, restored);
+    expect(notifications, 1);
+    controller.setChildOrder(restored);
+    expect(notifications, 1);
+    restored.clear();
+    expect(controller.childOrder, ['culled', 'unknown-size', 'a']);
+    for (final snapshot in snapshots) {
+      final info = controller.getInfo(snapshot.id);
+      expect(info.child, same(snapshot.child));
+      expect(info.gsPosition, snapshot.gsPosition);
+      expect(info.childSize, snapshot.childSize);
+      expect(info.rotation, snapshot.rotation);
+    }
+    addChild(controller, 'single');
+    controller.addChildren([
+      for (final id in ['batch-a', 'batch-b'])
+        CanvasChildArgs(
+          position: Offset.zero,
+          widget: const SizedBox(),
+          id: id,
+        ),
+    ]);
+    expect(controller.childOrder, [
+      'culled',
+      'unknown-size',
+      'a',
+      'single',
+      'batch-a',
+      'batch-b',
+    ]);
+  });
+
+  test('restoring an empty stack does not notify', () {
+    final controller = LazyCanvasController();
+    addTearDown(controller.dispose);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    controller.setChildOrder([]);
+    expect(notifications, 0);
+    expect(() => controller.setChildOrder(['missing']), throwsArgumentError);
+    expect(controller.childOrder, isEmpty);
+    expect(notifications, 0);
+  });
+
   for (final action in CanvasArrange.values) {
     test('$action moves a noncontiguous bundle atomically in stack order', () {
       final controller = LazyCanvasController();
@@ -265,6 +333,56 @@ void main() {
 
   // ---------- Rendering and retained measurements ----------
 
+  testWidgets('restoration preserves lazy visibility and ignores culled lift', (
+    tester,
+  ) async {
+    final entered = <String>[];
+    final exited = <String>[];
+    final controller = LazyCanvasController(
+      buildExtentMultiplier: 1,
+      onWidgetEnteredRender: entered.add,
+      onWidgetExitedRender: exited.add,
+    );
+    addChild(controller, 'a');
+    addChild(controller, 'b');
+    addChild(controller, 'far', position: const Offset(5000, 5000), size: null);
+    await pumpCanvas(tester, controller, foregroundChildId: 'far');
+    expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+      'a',
+      'b',
+    ]);
+    expect(find.byWidget(controller.getInfo('far').child), findsNothing);
+    expect(controller.getInfo('far').childSize, isNull);
+    entered.clear();
+    controller.setChildOrder(['far', 'b', 'a']);
+    await tester.pumpAndSettle();
+    expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+      'b',
+      'a',
+    ]);
+    expect(find.byWidget(controller.getInfo('far').child), findsNothing);
+    expect(entered, isEmpty);
+    expect(exited, isEmpty);
+    controller.scrollBy(const Offset(5000, 5000));
+    await tester.pumpAndSettle();
+    expect(controller.widgetsWithScreenPositions().single.id, 'far');
+    expect(find.byWidget(controller.getInfo('far').child), findsOneWidget);
+    expect(entered, ['far']);
+    expect(exited, unorderedEquals(['a', 'b']));
+    controller.setChildOrder(['a', 'far', 'b']);
+    await tester.pumpAndSettle();
+    expect(controller.widgetsWithScreenPositions().single.id, 'far');
+    controller.scrollBy(const Offset(-5000, -5000));
+    await tester.pumpAndSettle();
+    expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+      'a',
+      'b',
+    ]);
+    expect(find.byWidget(controller.getInfo('far').child), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
   testWidgets(
     'culled children retain layout sizes and participate in Arrange',
     (tester) async {
@@ -390,6 +508,36 @@ void main() {
         expect(notifications, 0);
         expect(controller.canArrange([a], CanvasArrange.forward), isTrue);
       }
+      // Arrange works on both sides of a restored stack.
+      expect(controller.bringForward([a]), isTrue);
+      await tester.pumpAndSettle();
+      await expectTop('a', Colors.red);
+      await pumpCanvas(
+        tester,
+        controller,
+        captureKey: captureKey,
+        foregroundChildId: a,
+      );
+      final beforeRestore = notifications;
+      controller.setChildOrder([a, b]);
+      await tester.pumpAndSettle();
+      expect(notifications, beforeRestore + 1);
+      expect(controller.childOrder, [a, b]);
+      expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+        a,
+        b,
+      ]);
+      await expectTop('a', Colors.red);
+      controller.setChildOrder([a, b]);
+      expect(notifications, beforeRestore + 1);
+      await pumpCanvas(tester, controller, captureKey: captureKey);
+      await expectTop('b', Colors.blue);
+      controller.setChildOrder([b, a]);
+      await tester.pumpAndSettle();
+      await expectTop('a', Colors.red);
+      controller.setChildOrder([a, b]);
+      await tester.pumpAndSettle();
+      await expectTop('b', Colors.blue);
       for (final (action, id, color) in [
         (CanvasArrange.forward, 'a', Colors.red),
         (CanvasArrange.backward, 'b', Colors.blue),
@@ -400,7 +548,7 @@ void main() {
         await tester.pumpAndSettle();
         await expectTop(id, color);
       }
-      expect(count, 4);
+      expect(count, 7);
       for (final snapshot in snapshots) {
         final info = controller.getInfo(snapshot.id);
         expect(info.gsPosition, snapshot.gsPosition);

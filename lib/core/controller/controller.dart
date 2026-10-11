@@ -247,6 +247,25 @@ class LazyCanvasController with ChangeNotifier {
 
   // ==================== Child Ordering ====================
 
+  /// Sets the complete back-to-front paint and hit-test order atomically.
+  /// Every existing ID, including culled children, must appear exactly once.
+  /// Throws [ArgumentError] for missing, duplicate, unknown, or excess IDs,
+  /// leaving order unchanged without notifying. Changed orders notify once;
+  /// unchanged orders (including an empty stack) do not notify.
+  void setChildOrder(List<CanvasChildId> ids) {
+    if (ids.length != _children.length ||
+        ids.toSet().length != ids.length ||
+        ids.any((id) => !_children.containsKey(id))) {
+      throw ArgumentError.value(ids, 'ids', 'Expected every existing ID once');
+    }
+    if (listEquals(childOrder, ids)) return;
+    for (var index = 0; index < ids.length; index++) {
+      _children[ids[index]]!.paintOrder = index;
+    }
+    _nextPaintOrder = ids.length;
+    markDirty();
+  }
+
   /// Checks whether [action] would change order, without notifying or mutating.
   /// Targets are deduplicated and all IDs are validated, as in the commands.
   /// Forward/backward throw [StateError] if a required layout size is unknown.
