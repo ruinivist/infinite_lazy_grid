@@ -117,6 +117,17 @@ controller.centerOnScreenOffset(const Offset(200, 150));
 
 ### Zoom & animate
 
+Set optional, read-only zoom limits when creating the controller:
+
+```dart
+final controller = LazyCanvasController(minScale: 0.25, maxScale: 4);
+```
+
+Omitted bounds are unrestricted. Supplied bounds must be finite and positive,
+with `minScale <= maxScale`. The initial scale of `1`, gestures, zoom commands,
+focus commands, and animations are clamped to the limits. Focus still centers
+the child, but a minimum scale may prevent it from fitting fully in the viewport.
+
 ```dart
 controller.updateScalebyDelta(0.2);      // zoom in
 controller.updateScalebyDelta(-0.2);     // zoom out

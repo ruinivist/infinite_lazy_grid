@@ -54,7 +54,17 @@ class LazyCanvasController with ChangeNotifier {
   final double inertiaFrictionCoefficient;
   final double buildExtentMultiplier;
 
+  /// Minimum zoom scale, or null for no lower limit.
+  final double? minScale;
+
+  /// Maximum zoom scale, or null for no upper limit.
+  final double? maxScale;
+
+  /// Supplied zoom limits must be finite, positive, and ordered.
+  /// The initial scale of 1 is clamped to these limits.
   LazyCanvasController({
+    this.minScale,
+    this.maxScale,
     this.debug = false,
     this.buildExtentMultiplier = 2,
     Size hashCellSize = const Size(100, 100),
@@ -73,7 +83,30 @@ class LazyCanvasController with ChangeNotifier {
   }) : assert(buildExtentMultiplier >= 1),
        assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
        _background = background,
-       _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize);
+       _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize) {
+    if (minScale != null && (!minScale!.isFinite || minScale! <= 0)) {
+      throw ArgumentError.value(
+        minScale,
+        'minScale',
+        'Must be finite and positive',
+      );
+    }
+    if (maxScale != null && (!maxScale!.isFinite || maxScale! <= 0)) {
+      throw ArgumentError.value(
+        maxScale,
+        'maxScale',
+        'Must be finite and positive',
+      );
+    }
+    if (minScale != null && maxScale != null && minScale! > maxScale!) {
+      throw ArgumentError.value(
+        maxScale,
+        'maxScale',
+        'Must be at least minScale',
+      );
+    }
+    _baseScale = _scale = _clampScale(1);
+  }
   // only top left is considered so if a widget has long width, it'll not be rendered
   // unless the cache extent is sufficient
 
@@ -136,6 +169,12 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   // ==================== Utils ====================
+
+  double _clampScale(double value) {
+    if (minScale != null && value < minScale!) return minScale!;
+    if (maxScale != null && value > maxScale!) return maxScale!;
+    return value;
+  }
 
   void markDirty() {
     _markDirty = true;
@@ -507,7 +546,8 @@ class LazyCanvasController with ChangeNotifier {
 
     // scale + offset => scale then offset
 
-    final newScale = _baseScale * details.scale;
+    if (details.scale != 1) _scaledDuringGesture = true;
+    final newScale = _clampScale(_baseScale * details.scale);
     if (newScale != _scale) {
       _scaledDuringGesture = true;
       _gsTopLeftOffset = newGsTopLeftOnScaling(
@@ -559,11 +599,12 @@ class LazyCanvasController with ChangeNotifier {
   }
 
   /// Increment or decrement the scale by an additive delta value.
+  /// Clamps to the zoom limits while preserving the focal point.
   void updateScalebyDelta(double delta, {Offset? focalPoint}) {
     stopAnimation();
     // added focalPoint param
     focalPoint ??= Offset(canvasSize.width / 2, canvasSize.height / 2);
-    final newScale = _scale + delta;
+    final newScale = _clampScale(_scale + delta);
     _gsTopLeftOffset = newGsTopLeftOnScaling(
       _gsTopLeftOffset,
       focalPoint,
@@ -679,6 +720,7 @@ class LazyCanvasController with ChangeNotifier {
   /// an offstage rendering will be used ( double render )
   /// Preferred horizontal margin used for [ScalingMode.fitInViewport].
   /// Fits rotated bounds in both viewport dimensions and centers using the resulting scale.
+  /// Zoom limits take precedence over fitting; the child remains centered.
   void focusOnChild(
     CanvasChildId id, {
     ScalingMode scalingMode = ScalingMode.keepScale,
@@ -735,6 +777,7 @@ class LazyCanvasController with ChangeNotifier {
         break;
     }
 
+    newScale = _clampScale(newScale);
     final newGsTopLeft = bounds.center - _ssCenter / newScale;
 
     if (animate) {
@@ -754,6 +797,7 @@ class LazyCanvasController with ChangeNotifier {
   // ==================== Animation ====================
 
   /// Animate the canvas to a new offset and scale
+  /// Clamps the target and animated scale to the zoom limits.
   Future<void> animateToOffsetAndScale({
     required Offset offset,
     required double scale,
@@ -767,7 +811,7 @@ class LazyCanvasController with ChangeNotifier {
     );
     _activeAnimation = anim;
     final offsetTween = Tween<Offset>(begin: _gsTopLeftOffset, end: offset);
-    final scaleTween = Tween<double>(begin: _scale, end: scale);
+    final scaleTween = Tween<double>(begin: _scale, end: _clampScale(scale));
 
     final curvedAnimation = CurvedAnimation(parent: anim, curve: curve);
     final offsetAnimation = offsetTween.animate(curvedAnimation);
@@ -775,7 +819,7 @@ class LazyCanvasController with ChangeNotifier {
 
     anim.addListener(() {
       _gsTopLeftOffset = offsetAnimation.value;
-      _scale = scaleAnimation.value;
+      _scale = _clampScale(scaleAnimation.value);
       markDirty();
     });
 
