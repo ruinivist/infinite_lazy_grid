@@ -56,6 +56,16 @@ class _DemoCanvasState extends State<DemoCanvas> {
 }
 ```
 
+## Migrating from 1.x
+
+Upgrade to `infinite_lazy_grid: ^2.0.0`:
+
+- `updatePosition(id, position)` → `update(id, position: position)`.
+- `updateChildWidget(id, widget)` → `update(id, widget: widget)`.
+- `update()` now returns a boolean.
+- Replace `buildCacheExtent`/`setBuildCacheExtent` with `buildExtentMultiplier` at construction. Default: twice the viewport.
+- `ChildInfo` is now read-only ( as it should've been ). Its constructor needs `rotation` and nullable `childSize`. Its `child` is unwrapped.
+
 ## Usage
 
 ### Adding/Removing children

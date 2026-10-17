@@ -1,6 +1,6 @@
 name: infinite_lazy_grid
 description: "infinitely scrollable and zoomable grid layout with lazy loading capabilities."
-version: 1.0.5
+version: 2.0.0
 homepage: https://github.com/ruinivist/infinite_lazy_grid
 
 environment:

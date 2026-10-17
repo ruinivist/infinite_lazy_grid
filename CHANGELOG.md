@@ -1,3 +1,9 @@
+## 2.0.0
+
+- **Breaking release.** See [migration notes](README.md#migrating-from-1x).
+- Add rotation and stacking controls.
+- Improve navigation and rendering.
+
 ## 1.0.0
 
 -   Initial release
