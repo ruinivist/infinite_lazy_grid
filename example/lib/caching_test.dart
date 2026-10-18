@@ -10,7 +10,7 @@ class CachingTestApp extends StatefulWidget {
 }
 
 class _CachingTestAppState extends State<CachingTestApp> {
-  final LazyCanvasController controller = LazyCanvasController();
+  final LazyCanvasController controller = LazyCanvasController(minScale: 0.1);
 
   @override
   void initState() {

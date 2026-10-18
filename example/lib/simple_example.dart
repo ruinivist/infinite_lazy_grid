@@ -18,7 +18,7 @@ class _SimpleExampleState extends State<SimpleExample> {
 
   @override
   void initState() {
-    controller = LazyCanvasController(debug: true);
+    controller = LazyCanvasController(debug: true, minScale: 0.1);
     final List<CanvasChildId> childIds = [];
 
     super.initState();

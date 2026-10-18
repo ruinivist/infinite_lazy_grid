@@ -10,7 +10,7 @@ class DynamicWidgetExample extends StatefulWidget {
 }
 
 class _DynamicWidgetExampleState extends State<DynamicWidgetExample> {
-  final LazyCanvasController controller = LazyCanvasController();
+  final LazyCanvasController controller = LazyCanvasController(minScale: 0.1);
 
   // Store child IDs for later reference
   late CanvasChildId externalDataId;

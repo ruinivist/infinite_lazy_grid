@@ -29,6 +29,7 @@ class _RenderCallbacksExampleState extends State<RenderCallbacksExample> {
     // Initialize controller with render callbacks
     controller = LazyCanvasController(
       debug: true,
+      minScale: 0.1,
       onWidgetEnteredRender: onWidgetEnteredRender,
       onWidgetExitedRender: onWidgetExitedRender,
     );
