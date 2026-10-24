@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:infinite_lazy_grid/core/background.dart';
+
 import '../../utils/measure_size.dart';
 import '../spatial_hashing.dart';
 import '../../utils/conversions.dart';
 import '../render.dart';
+
 import 'package:uuid/uuid.dart';
 
 part 'types.dart';
@@ -309,7 +311,7 @@ class LazyCanvasController with ChangeNotifier {
   /// Targets are deduplicated and all IDs are validated, as in the commands.
   /// Forward/backward throw [StateError] if a required layout size is unknown.
   bool canArrange(Iterable<CanvasChildId> ids, CanvasArrange action) =>
-      _arrangedOrder(ids, action) != null;
+      arrangedOrder(ids, action) != null;
 
   /// Moves the bundle above the nearest overlapping unselected child above it.
   /// Preserves target and non-target relative order; see [canArrange] for errors.
@@ -332,7 +334,7 @@ class LazyCanvasController with ChangeNotifier {
       _arrange(ids, CanvasArrange.back);
 
   bool _arrange(Iterable<CanvasChildId> ids, CanvasArrange action) {
-    final order = _arrangedOrder(ids, action);
+    final order = arrangedOrder(ids, action);
     if (order == null) return false;
     for (var index = 0; index < order.length; index++) {
       _children[order[index]]!.paintOrder = index;
@@ -342,7 +344,9 @@ class LazyCanvasController with ChangeNotifier {
     return true;
   }
 
-  List<CanvasChildId>? _arrangedOrder(
+  /// Proposes the complete back-to-front order without changing the canvas.
+  /// Returns null for no change; validation matches [canArrange].
+  List<CanvasChildId>? arrangedOrder(
     Iterable<CanvasChildId> ids,
     CanvasArrange action,
   ) {

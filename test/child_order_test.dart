@@ -156,6 +156,7 @@ void main() {
         expect(controller.childOrder, expected);
       });
       const targets = ['d', 'b', 'd'];
+      expect(controller.arrangedOrder(targets, action), expected);
       expect(controller.canArrange(targets, action), isTrue);
       expect(controller.childOrder, snapshot);
       expect(notifications, 0);
@@ -165,6 +166,7 @@ void main() {
       expect(snapshot, ['a', 'b', 'c', 'd', 'e']);
       expect(() => snapshot.add('extra'), throwsUnsupportedError);
       expect(() => snapshot[0] = 'extra', throwsUnsupportedError);
+      expect(controller.arrangedOrder(targets, action), isNull);
       expect(controller.canArrange(targets, action), isFalse);
       expect(arrange(controller, targets, action), isFalse);
       expect(notifications, 1);
@@ -181,9 +183,14 @@ void main() {
         <String>[],
         ['b', 'a', 'b'],
       ]) {
+        expect(controller.arrangedOrder(ids, action), isNull);
         expect(controller.canArrange(ids, action), isFalse);
         expect(arrange(controller, ids, action), isFalse);
       }
+      expect(
+        () => controller.arrangedOrder(['a', 'missing'], action),
+        throwsException,
+      );
       expect(
         () => controller.canArrange(['a', 'missing'], action),
         throwsException,
@@ -292,6 +299,7 @@ void main() {
       (['unknown'], CanvasArrange.backward),
       (['a', 'unknown'], CanvasArrange.forward),
     ]) {
+      expect(() => controller.arrangedOrder(ids, action), error);
       expect(() => controller.canArrange(ids, action), error);
       expect(() => arrange(controller, ids, action), error);
       expect(controller.childOrder, ['a', 'unknown', 'c']);
