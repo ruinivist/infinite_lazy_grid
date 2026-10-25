@@ -374,15 +374,7 @@ class LazyCanvasController with ChangeNotifier {
         final candidate = order[index];
         if (targets.contains(candidate)) continue;
         final footprint = _childFootprint(candidate);
-        if (footprints.any(
-          (path) =>
-              path.getBounds().overlaps(footprint.getBounds()) &&
-              !Path.combine(
-                PathOperation.intersect,
-                path,
-                footprint,
-              ).getBounds().isEmpty,
-        )) {
+        if (footprints.any((path) => _footprintsOverlap(path, footprint))) {
           crossed = candidate;
           break;
         }
@@ -393,6 +385,31 @@ class LazyCanvasController with ChangeNotifier {
     final result = others..insertAll(insertion, bundle);
     return listEquals(order, result) ? null : result;
   }
+
+  /// Finds children intersecting [canvasRect] in canvas/grid coordinates.
+  /// Returns an immutable back-to-front snapshot without building or notifying.
+  /// Uses rotated layout rectangles, including cached sizes of culled children;
+  /// unknown or empty sizes and edge-only contact do not count as overlap.
+  /// Throws [ArgumentError] for nonfinite bounds; empty rectangles return no IDs.
+  List<CanvasChildId> overlappingChildren(Rect canvasRect) {
+    if (!canvasRect.isFinite) {
+      throw ArgumentError.value(canvasRect, 'canvasRect', 'Must be finite');
+    }
+    if (canvasRect.isEmpty) return const [];
+    final footprint = Path()..addRect(canvasRect);
+    return List.unmodifiable(
+      childOrder.where((id) {
+        final size = _children[id]!.lastRenderedSize;
+        return size != null &&
+            !size.isEmpty &&
+            _footprintsOverlap(footprint, _childFootprint(id));
+      }),
+    );
+  }
+
+  bool _footprintsOverlap(Path first, Path second) =>
+      first.getBounds().overlaps(second.getBounds()) &&
+      !Path.combine(PathOperation.intersect, first, second).getBounds().isEmpty;
 
   Path _childFootprint(CanvasChildId id) {
     final child = _children[id]!;

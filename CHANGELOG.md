@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add a read-only `overlappingChildren` query for rotated child layout rectangles.
+
 ## 2.0.0
 
 - **Breaking release.** See [migration notes](README.md#migrating-from-1x).

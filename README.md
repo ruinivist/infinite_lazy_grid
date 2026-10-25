@@ -108,6 +108,20 @@ Commands validate all IDs, return whether order changed, and notify once on chan
 `canArrange` only checks. Forward/backward use rotated footprints and require
 supplied or cached sizes, throwing `StateError` if unknown. Front/back need no sizes.
 
+### Query overlapping children
+
+```dart
+final ids = controller.overlappingChildren(
+  const Rect.fromLTWH(100, 200, 300, 150), // Canvas/grid coordinates.
+);
+```
+
+Returns an immutable back-to-front snapshot using rotated layout rectangles,
+including cached measurements of culled children. Unknown or empty sizes and
+edge-only contact are excluded. Empty query rectangles return no IDs; nonfinite
+bounds throw `ArgumentError`. The query does not build children, change order,
+or notify listeners.
+
 ### Focus / center
 
 All of these animate by default (`duration` optional, `animate: false` to jump).
