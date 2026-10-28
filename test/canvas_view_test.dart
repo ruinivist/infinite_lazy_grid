@@ -73,6 +73,11 @@ Future<void> _drag(
   await tester.pump();
 }
 
+Future<void> _navigationFrames(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
+
 void main() {
   testWidgets('clips composited children at a shifted and scaled viewport', (
     tester,
@@ -184,6 +189,7 @@ void main() {
     expect(navigating, isTrue);
     await first.moveBy(const Offset(20, 10));
     await second.moveBy(const Offset(40, 20));
+    await _navigationFrames(tester);
     expect(controller.offset, isNot(Offset.zero));
     expect(overlayMoves, movesBeforeNavigation);
     await second.up();
@@ -234,6 +240,7 @@ void main() {
 
     await first.moveTo(const Offset(50, 220));
     await second.moveTo(const Offset(350, 220));
+    await _navigationFrames(tester);
     expect(controller.scale, closeTo(1.5, 1e-9));
     // The original canvas point beneath the centroid stays beneath it.
     final centroidCanvasPoint = const Offset(140, 180);
@@ -244,15 +251,18 @@ void main() {
 
     await first.moveTo(const Offset(100, 220));
     await second.moveTo(const Offset(300, 220));
+    await _navigationFrames(tester);
     expect(controller.scale, closeTo(1, 1e-9));
     expect(controller.offset.dx, closeTo(0, 1e-9));
     expect(controller.offset.dy, closeTo(0, 1e-9));
     await first.moveTo(const Offset(50, 220));
     await second.moveTo(const Offset(350, 220));
+    await _navigationFrames(tester);
 
     final beforePan = controller.offset;
     await first.moveBy(const Offset(30, 40));
     await second.moveBy(const Offset(30, 40));
+    await _navigationFrames(tester);
     expect(controller.scale, closeTo(1.5, 1e-9));
     expect(controller.offset.dx, closeTo(beforePan.dx - 20, 1e-9));
     expect(controller.offset.dy, closeTo(beforePan.dy - 40 / 1.5, 1e-9));
@@ -274,7 +284,7 @@ void main() {
     expect(controller.offset, frozenOffset);
   });
 
-  testWidgets('rebases touch configuration and drains after cancellation', (
+  testWidgets('ignores extra contacts and drains after cancellation', (
     tester,
   ) async {
     final ownership = <bool>[];
@@ -291,6 +301,7 @@ void main() {
       pointer: 2,
     );
     await second.moveBy(const Offset(20, 40));
+    await _navigationFrames(tester);
     final offset = controller.offset;
     final scale = controller.scale;
     final third = await tester.startGesture(const Offset(200, 300), pointer: 3);
@@ -300,6 +311,7 @@ void main() {
     expect(controller.offset, offset);
     expect(controller.scale, scale);
     await first.moveBy(const Offset(0, 30));
+    await _navigationFrames(tester);
     expect(controller.offset, isNot(offset));
 
     await second.cancel();
@@ -320,6 +332,7 @@ void main() {
       pointer: 6,
     );
     await partner.moveBy(const Offset(40, 0));
+    await _navigationFrames(tester);
     expect(controller.offset, isNot(frozen));
     await fresh.up();
     await partner.up();
@@ -375,6 +388,7 @@ void main() {
     expect(navigating, isTrue);
     expect(pendingTool, isFalse);
     await first.moveBy(const Offset(30, 10));
+    await _navigationFrames(tester);
     expect(controller.offset, isNot(Offset.zero));
     expect(childMoves, previousMoves);
     await first.up();
@@ -409,6 +423,7 @@ void main() {
       pointer: 2,
     );
     await second.moveBy(const Offset(40, 20));
+    await _navigationFrames(tester);
     expect(controller.offset, isNot(Offset.zero));
     await first.up();
     await second.up();
@@ -456,6 +471,7 @@ void main() {
       pointer: 3,
     );
     await secondFinger.moveBy(const Offset(40, 20));
+    await _navigationFrames(tester);
     expect(ownership, [true]);
     expect(controller.offset, isNot(Offset.zero));
     await pen.up();
