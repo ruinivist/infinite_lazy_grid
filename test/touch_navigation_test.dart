@@ -923,22 +923,15 @@ List<_Step> _schedule(
     ));
     if (time >= lastDeadline) break;
   }
+  int deliveryOrder(_Step step) {
+    if (step.finger == null) return 1;
+    return step.last ? 0 : -1;
+  }
+
   return steps..sort((a, b) {
     final time = a.time.compareTo(b.time);
-    return time != 0
-        ? time
-        : (a.finger == null
-                  ? 1
-                  : a.last
-                  ? 0
-                  : -1)
-              .compareTo(
-                b.finger == null
-                    ? 1
-                    : b.last
-                    ? 0
-                    : -1,
-              );
+    if (time != 0) return time;
+    return deliveryOrder(a).compareTo(deliveryOrder(b));
   });
 }
 

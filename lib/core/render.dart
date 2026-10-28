@@ -257,9 +257,9 @@ class _LazyCanvasState extends State<LazyCanvas>
           !_touchNavigationDraining &&
           _touches.length == 2) {
         _touchPair = (_touches.keys.first, _touches.keys.last);
-        _appliedTouches = (_touches.values.first, _touches.values.last);
-        _touchInitialSpan =
-            (_appliedTouches!.$2 - _appliedTouches!.$1).distance;
+        final positions = (_touches.values.first, _touches.values.last);
+        _appliedTouches = positions;
+        _touchInitialSpan = (positions.$2 - positions.$1).distance;
         _touchBaseScale = widget.controller.scale;
         _touchNavigationActive = true;
         widget.onTouchNavigationChanged?.call(true);

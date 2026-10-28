@@ -164,26 +164,6 @@ class TouchMotionReport {
 
 // ---------- Display frames ----------
 
-Future<void> _pumpFrames(
-  WidgetTester tester,
-  Duration duration,
-  int frameHz,
-  void Function(Duration, int) check,
-) async {
-  var previous = Duration.zero;
-  for (var frame = 1; previous < duration; frame++) {
-    final timestamp = Duration(
-      microseconds: math.min(
-        duration.inMicroseconds,
-        (frame * 1000000 / frameHz).round(),
-      ),
-    );
-    await tester.pump(timestamp - previous);
-    check(timestamp, frame);
-    previous = timestamp;
-  }
-}
-
 Future<void> _checkFrames(
   WidgetTester tester,
   Duration duration,
@@ -193,22 +173,31 @@ Future<void> _checkFrames(
 ) async {
   final report = TouchMotionReport();
   TestFailure? stateFailure;
-  await _pumpFrames(tester, duration, frameHz, (time, frame) {
+  var previous = Duration.zero;
+  for (var frame = 1; previous < duration; frame++) {
+    final timestamp = Duration(
+      microseconds: math.min(
+        duration.inMicroseconds,
+        (frame * 1000000 / frameHz).round(),
+      ),
+    );
+    await tester.pump(timestamp - previous);
     final painted = paintedTouchLandmarks(tester);
     final intended = permittedTouchView(bounds(frame), painted);
     report.sample(
-      time,
+      timestamp,
       painted,
       intended,
-      'frame $frame at ${time.inMicroseconds}us: expected=$intended painted=$painted',
+      'frame $frame at ${timestamp.inMicroseconds}us: expected=$intended painted=$painted',
     );
     try {
       onFrame?.call(intended);
     } on TestFailure catch (failure) {
       stateFailure ??= failure;
     }
-  });
-  if (stateFailure != null) throw stateFailure!;
+    previous = timestamp;
+  }
+  if (stateFailure != null) throw stateFailure;
   if (report.maxError >= touchTolerance) {
     debugPrint(
       'touch frame error=${report.maxError.toStringAsFixed(3)}px: ${report.worstContext}',
