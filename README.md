@@ -4,6 +4,14 @@ Infinite zoomable, pannable 2D canvas using spatial hash for only rendering what
 
 Example: https://infinite-lazy-grid.pages.dev/
 
+## Deploying the example
+
+`make deploy` builds the web example and deploys the current branch to Cloudflare Pages. Run `npx wrangler login` first to sign in. Only `main` updates the main demo; other branches get preview URLs. For example, `refactor/unify-navigation` deploys to https://refactor-unify-navigation.infinite-lazy-grid.pages.dev/.
+
+The deployment workflow runs on every branch push and includes a deployment link in its job summary. Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to the repository's GitHub Actions secrets. The token needs **Account → Cloudflare Pages → Edit** for the account that owns `infinite-lazy-grid`. Branches need this workflow before pushes can trigger deployments.
+
+Cloudflare keeps a stable branch URL pointing to that branch's latest deployment. See [preview deployments](https://developers.cloudflare.com/pages/configuration/preview-deployments/) for URL naming.
+
 <p align='center'>
     <img loading="lazy" src="https://raw.githubusercontent.com/ruinivist/infinite_lazy_grid/main/demo.gif" />
 </p>

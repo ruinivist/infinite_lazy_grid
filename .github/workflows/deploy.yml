@@ -1,0 +1,40 @@
+name: deploy example
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.8
+          channel: stable
+          cache: true
+      - run: make build
+      - name: Deploy branch
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.104.0
+          command: pages deploy example/build/web --project-name infinite-lazy-grid
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Preview link
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url || steps.deploy.outputs.deployment-url }}
+        run: printf '[Open deployed example](%s)\n' "$DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"
