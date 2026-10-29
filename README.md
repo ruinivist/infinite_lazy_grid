@@ -169,9 +169,8 @@ it, or adjust `inertiaFrictionCoefficient` to tune how quickly it settles.
 ### Touch navigation and application tools
 
 `LazyCanvas` defaults to one-finger touch navigation. For an editor where one
-finger draws or moves an object, use `TouchNavigationMode.twoFinger`. The first
-two fingers then pan and pinch-zoom; additional contacts are ignored, and stylus
-input stays available to tools.
+finger draws or moves an object, use `TouchNavigationMode.twoFinger`. Two or
+more fingers then pan and pinch-zoom; stylus input stays available to tools.
 Mouse navigation is controlled separately by `mousePanButtons`, and trackpad
 and wheel navigation remain available in either touch mode.
 
@@ -219,25 +218,11 @@ viewportBuilder: (context, viewport) => Overlay.wrap(
 Keep the supplied viewport at the region's origin and original size. A local
 `Overlay` also keeps descendant overlay portals in that gesture region.
 
-Touch movement is coordinated with display frames so separately delivered finger
-updates cannot produce a temporary zoom pulse. A lone update waits at most one
-extra display frame for its partner; newer input cannot extend that deadline.
-Both pan and zoom stay available throughout the gesture. A stationary finger
-anchors the canvas point beneath it; otherwise the centroid is the anchor.
-Rotation without a change in separation or centroid leaves the view unchanged.
-
-Coincident contacts still pan. An initially coincident pair establishes its
-zoom baseline on separation without changing zoom or losing centroid movement.
-Once established, that baseline survives contacts meeting again. Zoom stays
-within controller limits while panning continues. Without a configured minimum,
-coincident contacts retain the last positive scale until they separate.
-
-When either original finger lifts or cancels, queued received motion is applied
-and the canvas freezes. Ownership remains active until **all** touches release
-or cancel. An extra or replacement finger cannot restart navigation during this
-release period. No inertia starts at the end of this two-finger sequence.
-Changing the mode during a touch sequence takes effect on the next sequence.
-Replacing the controller or disposing the canvas cancels queued touch updates.
+When fewer than two fingers remain, the canvas freezes and ownership remains
+active until **all** touches release or cancel. Adding another finger during
+this release period does not restart navigation. No inertia starts at the end
+of this two-finger sequence. Changing the mode during a touch sequence takes
+effect on the next sequence.
 
 The first touch stops existing viewport animation. Call
 `controller.stopAnimation()` to stop inertia or an animated transition
