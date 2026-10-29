@@ -1,39 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
-import 'package:flutter/gestures.dart'; // PointerScrollEvent
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import '../utils/styles.dart';
 import '../utils/conversions.dart';
 import 'background.dart';
 import 'controller/controller.dart';
 
 part 'debug.dart';
+part 'navigation.dart';
 
-/// Determines whether a touch drag navigates or remains available to app tools.
-enum TouchNavigationMode { oneFinger, twoFinger }
-
-/// An infinite canvas that places all the children at the specified positions.
-/// Needs a [LazyCanvasController] to control the canvas and a [CanvasBackground] to draw the background.
+/// An infinite canvas that lazily lays out children in canvas coordinates.
 class LazyCanvas extends StatefulWidget {
   final LazyCanvasController controller;
+
+  /// Mouse buttons that pan with the default navigation wrapper.
   final int mousePanButtons;
 
   /// Temporarily paints and targets this child above the document stack.
   /// Does not change controller order or remount keyed child state.
   final CanvasChildId? foregroundChildId;
 
-  /// Selects touch navigation for the next sequence; defaults to one finger.
-  final TouchNavigationMode touchNavigationMode;
-
-  /// Reports two-finger ownership before raw down delivery or canvas movement.
-  /// Remains true until all touches release, even after navigation freezes.
-  /// Consumers must cancel their tool operation and suppress further tool input;
-  /// raw events and child gestures are not automatically canceled.
-  final ValueChanged<bool>? onTouchNavigationChanged;
-
-  /// Composes the viewport and app overlays inside the canvas gesture region.
-  /// Keep the supplied viewport at the region's origin and original size.
+  /// Composes the viewport and overlays inside the navigation region.
+  /// Keep the viewport at the region's origin and original size.
   final Widget Function(BuildContext context, Widget viewport)? viewportBuilder;
+
+  /// Replaces all default touch, mouse, trackpad, and wheel navigation.
+  /// Return the child unchanged to disable built-in navigation. It includes
+  /// [viewportBuilder] content. Raw controller pointer callbacks still observe
+  /// input. Custom wrappers own recognition, cancellation, and pointer signals;
+  /// [mousePanButtons] and [onPointerScroll] only configure the default wrapper.
+  final Widget Function(BuildContext context, Widget child)? navigationBuilder;
+
+  /// Replaces ordinary wheel scrolling in the default navigation wrapper.
   final void Function(LazyCanvasController controller, Offset delta)?
   onPointerScroll;
 
@@ -41,9 +41,8 @@ class LazyCanvas extends StatefulWidget {
     required this.controller,
     this.mousePanButtons = kPrimaryMouseButton,
     this.foregroundChildId,
-    this.touchNavigationMode = TouchNavigationMode.oneFinger,
-    this.onTouchNavigationChanged,
     this.viewportBuilder,
+    this.navigationBuilder,
     this.onPointerScroll,
     super.key,
   });
@@ -54,16 +53,6 @@ class LazyCanvas extends StatefulWidget {
 
 class _LazyCanvasState extends State<LazyCanvas>
     with TickerProviderStateMixin<LazyCanvas> {
-  final _touches = <int, Offset>{};
-  TouchNavigationMode? _touchMode;
-  bool _touchNavigationActive = false;
-  bool _touchNavigationDraining = false;
-  Offset _touchFocalPoint = Offset.zero;
-  double _touchInitialSpan = 0;
-
-  TouchNavigationMode get _effectiveTouchMode =>
-      _touchMode ?? widget.touchNavigationMode;
-
   @override
   void initState() {
     super.initState();
@@ -74,8 +63,6 @@ class _LazyCanvasState extends State<LazyCanvas>
   void didUpdateWidget(covariant LazyCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      // A replacement controller must not inherit an unfinished transform.
-      _touchNavigationDraining = _touchNavigationActive;
       oldWidget.controller.setTickerProvider(null);
       widget.controller.setTickerProvider(this);
     }
@@ -90,251 +77,85 @@ class _LazyCanvasState extends State<LazyCanvas>
   @override
   Widget build(BuildContext context) {
     widget.controller.setBuildContext(context);
-    return Listener(
-      behavior: HitTestBehavior
-          .translucent, // ensure scroll signals are captured even on empty space
-      onPointerSignal: (event) {
-        if (event is PointerScaleEvent) {
-          final delta = (event.scale - 1) * 0.25; // sensitivity
-          widget.controller.updateScalebyDelta(
-            delta,
-            focalPoint: event.localPosition,
+    final viewport = ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final childrenWithPositions = List<ChildInfo>.of(
+          widget.controller.widgetsWithScreenPositions(),
+        );
+        final foregroundIndex = childrenWithPositions.indexWhere(
+          (info) => info.id == widget.foregroundChildId,
+        );
+        if (foregroundIndex >= 0) {
+          childrenWithPositions.add(
+            childrenWithPositions.removeAt(foregroundIndex),
           );
-        } else if (event is PointerScrollEvent) {
-          final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-          if (pressed.contains(LogicalKeyboardKey.controlLeft) ||
-              pressed.contains(LogicalKeyboardKey.controlRight)) {
-            final delta = (-event.scrollDelta.dy) * 0.0015; // sensitivity
-            if (delta != 0) {
-              widget.controller.updateScalebyDelta(
-                delta,
-                focalPoint: event.localPosition,
-              );
-            }
-          } else if (event.scrollDelta.dy != 0) {
-            GestureBinding.instance.pointerSignalResolver.register(event, (
-              event,
-            ) {
-              final delta = Offset(
-                0,
-                (event as PointerScrollEvent).scrollDelta.dy,
-              );
-              final handler = widget.onPointerScroll;
-              if (handler == null) {
-                widget.controller.scrollBy(delta);
-              } else {
-                handler(widget.controller, delta);
-              }
-            });
-          }
         }
-        // handle any other registered signal events
-        widget.controller.rawPointerSignalListener?.call(event);
-      },
-      onPointerDown: (event) {
-        _handleTouch(event);
-        widget.controller.rawPointerDownListener?.call(event);
-      },
-      onPointerMove: (event) {
-        _handleTouch(event);
-        widget.controller.rawPointerMoveListener?.call(event);
-      },
-      onPointerUp: (event) {
-        _handleTouch(event);
-        widget.controller.rawPointerUpListener?.call(event);
-      },
-      onPointerCancel: (event) {
-        _handleTouch(event);
-        widget.controller.rawPointerCancelListener?.call(event);
-      },
-      child: RawGestureDetector(
-        behavior: HitTestBehavior.translucent,
-        gestures: {
-          _NonMouseScaleGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<
-                _NonMouseScaleGestureRecognizer
-              >(_NonMouseScaleGestureRecognizer.new, (recognizer) {
-                recognizer.touchNavigationMode = () => _effectiveTouchMode;
-                _configureScaleRecognizer(recognizer);
-              }),
-          _MouseScaleGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<
-                _MouseScaleGestureRecognizer
-              >(_MouseScaleGestureRecognizer.new, (recognizer) {
-                recognizer.mousePanButtons = widget.mousePanButtons;
-                _configureScaleRecognizer(recognizer);
-              }),
-        },
-        child: ListenableBuilder(
-          listenable: widget.controller,
-          builder: (context, _) {
-            final childrenWithPositions = List<ChildInfo>.of(
-              widget.controller.widgetsWithScreenPositions(),
+        final children = childrenWithPositions.map((info) {
+          Widget child = info.child;
+          if (widget.controller.debug) {
+            child = _Debug(
+              id: info.id,
+              gs: info.gsPosition,
+              ss: info.ssPosition,
+              child: child,
             );
-            final foregroundIndex = childrenWithPositions.indexWhere(
-              (info) => info.id == widget.foregroundChildId,
-            );
-            if (foregroundIndex >= 0) {
-              childrenWithPositions.add(
-                childrenWithPositions.removeAt(foregroundIndex),
-              );
-            }
-            final children = childrenWithPositions.map((info) {
-              Widget child = info.child;
-              if (widget.controller.debug) {
-                child = _Debug(
-                  id: info.id,
-                  gs: info.gsPosition,
-                  ss: info.ssPosition,
-                  child: child,
-                );
-              }
-              return Container(key: ValueKey<String>(info.id), child: child);
-            }).toList();
-            Widget viewport = _CanvasRenderObject(
-              childInfos: childrenWithPositions,
-              canvasBackground: widget.controller.background,
-              scale: widget.controller.scale,
-              gridSpaceOffset: widget.controller.offset,
-              onCanvasSizeChange: widget.controller.onCanvasSizeChange,
-              onChildSizeChange: widget.controller.onChildSizeChange,
-              children: children,
-            );
+          }
+          return Container(key: ValueKey<String>(info.id), child: child);
+        }).toList();
+        Widget viewport = _CanvasRenderObject(
+          childInfos: childrenWithPositions,
+          canvasBackground: widget.controller.background,
+          scale: widget.controller.scale,
+          gridSpaceOffset: widget.controller.offset,
+          onCanvasSizeChange: widget.controller.onCanvasSizeChange,
+          onChildSizeChange: widget.controller.onChildSizeChange,
+          children: children,
+        );
 
-            if (widget.controller.debug) {
-              viewport = Stack(
-                children: [
-                  viewport,
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    child: Text(
-                      'Offset: (${widget.controller.offset.dx.toStringAsFixed(2)}, '
-                      '${widget.controller.offset.dy.toStringAsFixed(2)})\n'
-                      'Scale: ${widget.controller.scale.toStringAsFixed(1)}',
-                      style: monospaceStyle(context),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return widget.viewportBuilder?.call(context, viewport) ?? viewport;
-          },
-        ),
-      ),
+        if (widget.controller.debug) {
+          viewport = Stack(
+            children: [
+              viewport,
+              Positioned(
+                top: 16,
+                left: 16,
+                child: Text(
+                  'Offset: (${widget.controller.offset.dx.toStringAsFixed(2)}, '
+                  '${widget.controller.offset.dy.toStringAsFixed(2)})\n'
+                  'Scale: ${widget.controller.scale.toStringAsFixed(1)}',
+                  style: monospaceStyle(context),
+                ),
+              ),
+            ],
+          );
+        }
+        return widget.viewportBuilder?.call(context, viewport) ?? viewport;
+      },
+    );
+    final navigation =
+        widget.navigationBuilder?.call(context, viewport) ??
+        _CanvasNavigation(
+          controller: widget.controller,
+          mousePanButtons: widget.mousePanButtons,
+          onPointerScroll: widget.onPointerScroll,
+          child: viewport,
+        );
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (event) =>
+          widget.controller.rawPointerDownListener?.call(event),
+      onPointerMove: (event) =>
+          widget.controller.rawPointerMoveListener?.call(event),
+      onPointerUp: (event) =>
+          widget.controller.rawPointerUpListener?.call(event),
+      onPointerCancel: (event) =>
+          widget.controller.rawPointerCancelListener?.call(event),
+      onPointerSignal: (event) =>
+          widget.controller.rawPointerSignalListener?.call(event),
+      child: navigation,
     );
   }
-
-  void _configureScaleRecognizer(ScaleGestureRecognizer recognizer) {
-    recognizer
-      ..onStart = widget.controller.onScaleStart
-      ..onUpdate = widget.controller.onScaleUpdate
-      ..onEnd = widget.controller.onScaleEnd;
-  }
-
-  /// Coordinates raw touches independently of a child's gesture-arena result.
-  /// Only the opt-in two-finger mode transforms the canvas here.
-  void _handleTouch(PointerEvent event) {
-    if (event.kind != PointerDeviceKind.touch) return;
-    final configurationChanged = event is! PointerMoveEvent;
-    if (event is PointerDownEvent) {
-      if (_touches.isEmpty) {
-        _touchMode = widget.touchNavigationMode;
-        widget.controller.stopAnimation();
-      }
-      _touches[event.pointer] = event.localPosition;
-    } else {
-      if (!_touches.containsKey(event.pointer)) return;
-      if (event is PointerMoveEvent) {
-        _touches[event.pointer] = event.localPosition;
-      } else {
-        _touches.remove(event.pointer);
-      }
-    }
-
-    if (_touches.isEmpty) {
-      _touchMode = null;
-      _touchNavigationDraining = false;
-      if (_touchNavigationActive) {
-        _touchNavigationActive = false;
-        widget.onTouchNavigationChanged?.call(false);
-      }
-      return;
-    }
-    if (_effectiveTouchMode != TouchNavigationMode.twoFinger ||
-        _touchNavigationDraining) {
-      return;
-    }
-    if (_touches.length < 2) {
-      _touchNavigationDraining = _touchNavigationActive;
-      return;
-    }
-
-    final focalPoint =
-        _touches.values.reduce((a, b) => a + b) / _touches.length.toDouble();
-    final span =
-        _touches.values
-            .map((position) => (position - focalPoint).distance)
-            .reduce((a, b) => a + b) /
-        _touches.length;
-    if (configurationChanged || _touchInitialSpan == 0) {
-      if (!_touchNavigationActive) {
-        _touchNavigationActive = true;
-        widget.onTouchNavigationChanged?.call(true);
-      }
-      _touchFocalPoint = focalPoint;
-      _touchInitialSpan = span;
-      widget.controller.onScaleStart(
-        ScaleStartDetails(
-          focalPoint: focalPoint,
-          pointerCount: _touches.length,
-          kind: PointerDeviceKind.touch,
-        ),
-      );
-      return;
-    }
-
-    // Coincident fingers cannot establish a usable zoom ratio.
-    if (span == 0) {
-      _touchInitialSpan = 0;
-      return;
-    }
-    widget.controller.onScaleUpdate(
-      ScaleUpdateDetails(
-        focalPoint: focalPoint,
-        focalPointDelta: focalPoint - _touchFocalPoint,
-        scale: span / _touchInitialSpan,
-        pointerCount: _touches.length,
-      ),
-    );
-    _touchFocalPoint = focalPoint;
-  }
-}
-
-class _NonMouseScaleGestureRecognizer extends ScaleGestureRecognizer {
-  late TouchNavigationMode Function() touchNavigationMode;
-
-  @override
-  bool isPointerAllowed(PointerDownEvent event) =>
-      event.kind != PointerDeviceKind.mouse &&
-      event.kind != PointerDeviceKind.stylus &&
-      event.kind != PointerDeviceKind.invertedStylus &&
-      (event.kind != PointerDeviceKind.touch ||
-          touchNavigationMode() == TouchNavigationMode.oneFinger) &&
-      super.isPointerAllowed(event);
-}
-
-class _MouseScaleGestureRecognizer extends ScaleGestureRecognizer {
-  int mousePanButtons = kPrimaryMouseButton;
-
-  @override
-  bool isPointerPanZoomAllowed(PointerPanZoomStartEvent event) => false;
-
-  @override
-  bool isPointerAllowed(PointerDownEvent event) =>
-      event.kind == PointerDeviceKind.mouse &&
-      event.buttons & mousePanButtons != 0 &&
-      super.isPointerAllowed(event);
 }
 
 /// A combined widget for all the render object of the children + background.

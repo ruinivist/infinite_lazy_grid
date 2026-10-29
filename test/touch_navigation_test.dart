@@ -125,40 +125,28 @@ void main() {
     expect(report.verify, throwsA(isA<TestFailure>()));
   });
 
-  test(
-    'stationary anchor check rejects centroid drift despite correct endpoints',
-    () {
-      final current = (initial.$1, initial.$2 + const Offset(72, 42));
-      final wrong = expectedTouchView(start, initial, current);
-      final correct = stationaryTouchView(start, initial, current);
-      final anchor = start.offset + initial.$1 / start.scale;
-      expect(
-        (paintedTouchPoint(screenTouchPoints(correct), anchor) - initial.$1)
-            .distance,
-        lessThan(touchTolerance),
+  test('frame checks reject an incorrect centroid anchor', () {
+    final current = (initial.$1, initial.$2 + const Offset(72, 42));
+    final correct = expectedTouchView(start, initial, current);
+    final wrong = (
+      offset: correct.offset + const Offset(12, 8),
+      scale: correct.scale,
+    );
+    final report = TouchMotionReport()
+      ..sample(
+        Duration.zero,
+        screenTouchPoints(wrong),
+        correct,
+        'centroid drift',
+      )
+      ..sample(
+        const Duration(milliseconds: 16),
+        screenTouchPoints(start),
+        start,
+        'correct endpoint',
       );
-      expect(
-        (paintedTouchPoint(screenTouchPoints(wrong), anchor) - initial.$1)
-            .distance,
-        greaterThan(20),
-      );
-      final report = TouchMotionReport()
-        ..sample(Duration.zero, screenTouchPoints(start), start, 'start')
-        ..sample(
-          const Duration(milliseconds: 8),
-          screenTouchPoints(wrong),
-          correct,
-          'anchor drift',
-        )
-        ..sample(
-          const Duration(milliseconds: 16),
-          screenTouchPoints(start),
-          start,
-          'end',
-        );
-      expect(report.verify, throwsA(isA<TestFailure>()));
-    },
-  );
+    expect(report.verify, throwsA(isA<TestFailure>()));
+  });
 
   test('independent frame schedules observe both sides of trailing input', () {
     for (final timing in [
@@ -443,7 +431,7 @@ void main() {
           .controller;
       const initial = (Offset(250, 340), Offset(490, 340));
       final start = touchView(controller);
-      final first = await tester.startGesture(initial.$1, pointer: 1);
+      final first = await startTouchNavigation(tester, initial.$1, pointer: 1);
       final second = await tester.startGesture(initial.$2, pointer: 2);
       var previous = start;
       for (final delta in [
@@ -483,7 +471,8 @@ void main() {
         const center = Offset(380, 340);
         final start = touchView(controller);
         final anchor = start.offset + center / start.scale;
-        final first = await tester.startGesture(
+        final first = await startTouchNavigation(
+          tester,
           center - const Offset(40, 0),
           pointer: 1,
         );
@@ -529,7 +518,7 @@ void main() {
           .widget<LazyCanvas>(find.byType(LazyCanvas))
           .controller;
       const center = Offset(380, 340);
-      final first = await tester.startGesture(center, pointer: 1);
+      final first = await startTouchNavigation(tester, center, pointer: 1);
       final second = await tester.startGesture(center, pointer: 2);
       final start = touchView(controller);
       const delta = Offset(20, 10);
@@ -579,7 +568,8 @@ void main() {
       const center = Offset(380, 340);
       final start = touchView(controller);
       final anchor = start.offset + center / start.scale;
-      final first = await tester.startGesture(
+      final first = await startTouchNavigation(
+        tester,
         center - const Offset(40, 0),
         pointer: 1,
       );
@@ -609,88 +599,6 @@ void main() {
     },
   );
 
-  for (final cancel in [false, true]) {
-    for (final removed in [0, 1]) {
-      testWidgets(
-        '${cancel ? 'canceling' : 'lifting'} finger ${removed + 1} blocks replacement until all lift',
-        (tester) async {
-          await pumpTouchCanvas(tester);
-          final controller = tester
-              .widget<LazyCanvas>(find.byType(LazyCanvas))
-              .controller;
-          final fingers = [
-            await tester.startGesture(const Offset(250, 340), pointer: 1),
-            await tester.startGesture(const Offset(490, 340), pointer: 2),
-          ];
-          final start = touchView(controller);
-          const initialTouches = (Offset(250, 340), Offset(490, 340));
-          const navigationDelta = Offset(40, 20);
-          final frozen = stationaryTouchView(start, initialTouches, (
-            initialTouches.$1,
-            initialTouches.$2 + navigationDelta,
-          ));
-          await fingers[1].moveBy(navigationDelta);
-          await pumpTouchResponse(tester, previous: start, target: frozen);
-          if (cancel) {
-            await fingers[removed].cancel();
-          } else {
-            await fingers[removed].up();
-          }
-          final survivor = fingers[1 - removed];
-          await survivor.moveBy(const Offset(30, 10));
-          await pumpTouchResponse(tester, previous: frozen, target: frozen);
-          expectTouchView(
-            touchView(controller),
-            frozen,
-            'the remaining finger must not restart a single-finger pan',
-          );
-          final replacement = await tester.startGesture(
-            const Offset(600, 400),
-            pointer: 3,
-          );
-          await survivor.moveBy(const Offset(20, 10));
-          await replacement.moveBy(const Offset(40, 20));
-          await pumpTouchResponse(tester, previous: frozen, target: frozen);
-          expectTouchView(
-            touchView(controller),
-            frozen,
-            'a replacement finger must not restart navigation before all lift',
-          );
-          await survivor.up();
-          await replacement.up();
-          await pumpTouchHold(tester, expected: frozen);
-          expectTouchView(
-            touchView(controller),
-            frozen,
-            'draining interrupted touches must not start inertia',
-          );
-
-          const initial = (Offset(250, 340), Offset(490, 340));
-          final fresh = await tester.startGesture(initial.$1, pointer: 4);
-          final partner = await tester.startGesture(initial.$2, pointer: 5);
-          const delta = Offset(40, 0);
-          await partner.moveBy(delta);
-          final freshTarget = stationaryTouchView(frozen, initial, (
-            initial.$1,
-            initial.$2 + delta,
-          ));
-          await pumpTouchResponse(
-            tester,
-            previous: frozen,
-            target: freshTarget,
-          );
-          expectTouchView(
-            touchView(controller),
-            freshTarget,
-            'a fresh two-finger gesture must work after every old touch has lifted',
-          );
-          await partner.up();
-          await fresh.up();
-        },
-      );
-    }
-  }
-
   for (final motion in _Motion.values) {
     for (final delivery in _Delivery.values) {
       for (final frameHz in [60, 120]) {
@@ -708,11 +616,14 @@ void main() {
             final start = touchView(controller);
             final initial = _positions(motion, 0);
             final gestures = [
-              await tester.startGesture(initial.$1 + origin, pointer: 1),
+              await startTouchNavigation(
+                tester,
+                initial.$1 + origin,
+                pointer: 1,
+              ),
               await tester.startGesture(initial.$2 + origin, pointer: 2),
             ];
             final samples = _TouchSamples(start, initial, motion: motion);
-            final stationaryAnchor = start.offset + initial.$1 / start.scale;
             final report = TouchMotionReport();
             var now = Duration.zero;
 
@@ -762,14 +673,6 @@ void main() {
                   permittedTouchView(bounds, painted),
                   '$context bounds=$bounds',
                 );
-                if (motion == _Motion.stationaryFinger) {
-                  expect(
-                    (paintedTouchPoint(painted, stationaryAnchor) - initial.$1)
-                        .distance,
-                    lessThan(touchTolerance),
-                    reason: 'stationary finger anchor: $context',
-                  );
-                }
               }
             }
 
@@ -983,9 +886,7 @@ class _TouchSamples {
       final due = _frame > firstFrame;
       // A lone event is indistinguishable from half a pan on its first frame.
       if (!input.complete || (!due && input.changed.length < 2)) continue;
-      final view = motion == _Motion.stationaryFinger
-          ? stationaryTouchView(start, initial, input.positions)
-          : expectedTouchView(start, initial, input.positions);
+      final view = expectedTouchView(start, initial, input.positions);
       upper = view;
       if (due) lower = view;
     }

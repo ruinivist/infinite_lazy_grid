@@ -166,67 +166,85 @@ await controller.animateToOffsetAndScale(
 Drag scrolling has inertia by default. Set `inertiaEnabled: false` to disable
 it, or adjust `inertiaFrictionCoefficient` to tune how quickly it settles.
 
-### Touch navigation and application tools
+### Navigation
 
-`LazyCanvas` defaults to one-finger touch navigation. For an editor where one
-finger draws or moves an object, use `TouchNavigationMode.twoFinger`. Two or
-more fingers then pan and pinch-zoom; stylus input stays available to tools.
-Mouse navigation is controlled separately by `mousePanButtons`, and trackpad
-and wheel navigation remain available in either touch mode.
+`LazyCanvas(controller: controller)` installs the default navigation: one-finger
+pan, multi-finger pan and pinch zoom, primary-button mouse dragging, trackpad
+pan and zoom, and wheel scrolling on both axes. Control-wheel and pointer-scale
+signals zoom at the pointer. Stylus input remains available to application tools.
 
-The ownership callback fires synchronously when the second finger lands,
-before the controller's raw down callback or any canvas transform. Cancel the
-unfinished tool operation without committing it, and suppress tool input
-while navigation owns the sequence:
+`mousePanButtons` selects the default mouse buttons. `onPointerScroll` replaces
+ordinary wheel scrolling and receives the full screen-space delta. Nested
+scrollables can consume signals before the canvas handles them.
+
+Touch navigation uses Flutter's gesture thresholds and cooperates with child
+gestures. It does not take over an object drag a child has already recognized.
+Once navigation starts, movement has no additional dead zone. Adding or removing
+contacts rebases without a viewport jump; remaining contacts continue navigating.
+All participating contacts contribute to the centroid and pinch span.
+
+Multi-contact updates are coordinated with display frames to prevent temporary
+zoom pulses from separately delivered finger events. An incomplete sample waits
+at most one extra frame; newer input cannot extend its deadline. Single-contact
+panning does not wait for a partner. Zoom uses centroid anchoring even when one
+finger stays still. Coincident contacts remain finite and continue panning.
+
+Pure translation can end with inertia. Scaling or cancellation suppresses inertia
+for that gesture. A new pointer stops viewport animation. Controller replacement
+and disposal discard pending touch updates. `controller.stopAnimation()` stops
+inertia or a programmed transition without changing the current viewport.
+
+### Replace navigation
+
+`navigationBuilder` replaces **all** default navigation. Returning its child alone
+disables built-in touch, mouse, trackpad, wheel, and control-wheel navigation:
 
 ```dart
-bool touchNavigationActive = false;
-
-void onToolPointerDown(PointerDownEvent event) {
-  if (touchNavigationActive) return;
-  // Start the application's tool operation.
-}
-
 LazyCanvas(
   controller: controller,
-  touchNavigationMode: TouchNavigationMode.twoFinger,
-  mousePanButtons: kSecondaryMouseButton | kMiddleMouseButton,
-  onTouchNavigationChanged: (active) {
-    touchNavigationActive = active;
-    if (active) {
-      // Discard the unfinished tool operation; clear its preview/pointer.
-    }
-  },
-);
+  navigationBuilder: (context, child) => child,
+)
 ```
 
-Apply the same guard to tool move/up handlers and child drag callbacks. Raw
-pointer events still arrive, and child gesture recognizers are not canceled
-automatically. Navigation can take over even after a child has won a drag.
-Keep interrupted pointers suppressed through their final event dispatch:
-ownership can become false before a child's final-up tap callback runs.
-
-Use `viewportBuilder` to put floating object controls in the same gesture
-region. An overlay outside `LazyCanvas` will not contribute touches:
+Supply your own Flutter input widgets to drive the same controller:
 
 ```dart
-viewportBuilder: (context, viewport) => Overlay.wrap(
-  child: Stack(children: [viewport, objectControls]),
+LazyCanvas(
+  controller: controller,
+  navigationBuilder: (context, child) => GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onScaleStart: controller.onScaleStart,
+    onScaleUpdate: controller.onScaleUpdate,
+    onScaleEnd: controller.onScaleEnd,
+    child: child,
+  ),
+)
+```
+
+This custom wrapper uses Flutter's scale recognition instead of grid's touch
+sample coordination and supplies no wheel handling. Custom wrappers own gesture
+recognition, interruption, and pointer signals; controller transforms still apply
+zoom limits and inertia settings. `mousePanButtons` and `onPointerScroll` only
+configure the default wrapper. Raw controller pointer callbacks remain observers
+in either configuration and do not move the viewport themselves.
+
+`TouchNavigationMode` and `onTouchNavigationChanged` have been removed. Editors
+that need special takeover or release-locking rules must supply their own wrapper.
+
+### Compose object controls
+
+`viewportBuilder` composes the viewport before navigation wraps it, so overlays
+share the same gesture region with both default and custom navigation:
+
+```dart
+viewportBuilder: (context, viewport) => Stack(
+  children: [viewport, objectControls],
 ),
 ```
 
-Keep the supplied viewport at the region's origin and original size. A local
-`Overlay` also keeps descendant overlay portals in that gesture region.
-
-When fewer than two fingers remain, the canvas freezes and ownership remains
-active until **all** touches release or cancel. Adding another finger during
-this release period does not restart navigation. No inertia starts at the end
-of this two-finger sequence. Changing the mode during a touch sequence takes
-effect on the next sequence.
-
-The first touch stops existing viewport animation. Call
-`controller.stopAnimation()` to stop inertia or an animated transition
-explicitly without changing the current viewport.
+Keep the viewport at the region's origin and original size. An overlay outside
+`LazyCanvas` is outside its navigation region. The example's Navigation page lets
+you compare default, disabled, and custom gesture handling.
 
 ### Background options
 

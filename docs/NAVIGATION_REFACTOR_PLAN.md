@@ -2,104 +2,84 @@
 
 ## Goal and scope
 
-Give `LazyCanvas` useful navigation defaults and let applications override gesture decisions without rebuilding pan, pinch, or inertia. Keep viewport rendering independent of input policy. Breaking public API changes are allowed. Application migration, including Elseplane, is separate work.
+Give `LazyCanvas` conventional navigation defaults and one escape hatch for custom input. Fix jittery translation during pinch zoom in shared touch handling. Breaking API changes are allowed. Application migration, including Elseplane, is separate work.
 
-The outstanding bug is jittery translation during two-finger zoom. Fix it in shared navigation handling rather than adding another implementation selected by a touch mode.
+The rollback baseline retained the stabilization tests while restoring the earlier implementation. Its focused Chrome run produced 78 passes and 46 failures. Those failures mixed motion defects with expectations about editor-specific gesture policies.
 
-## Starting point
-
-The implementation and README are restored to `f6053f7`, before the two touch stabilization commits. All tests from `6fbda1c` and `70e0d7c` remain unchanged, including the updated `canvas_view_test.dart` and the three added touch test files. Git history is preserved.
-
-The retained tests describe both general navigation guarantees and particular interaction policies. Some intentionally fail against this baseline. Do not skip them or weaken their assertions to make the rollback green.
-
-Chrome validation on 2026-10-29 produced these results using the command below:
-
-| Test file | Before rollback | After rollback |
-| --- | --- | --- |
-| `touch_navigation_test.dart` | 69 passed | 37 passed, 32 failed |
-| `touch_lifecycle_test.dart` | 24 passed | 10 passed, 14 failed |
-| `canvas_view_test.dart` | 31 passed | 31 passed |
-| Total | 124 passed | 78 passed, 46 failed |
-
-Analysis reported no issues after the rollback. The failures include motion timing, stationary anchoring, coincident contacts, and fixed-pair lifetime behavior; they are not all evidence of the same translation bug.
-
-Current navigation has two paths in `lib/core/render.dart`: a Flutter scale recognizer for `oneFinger`, and raw touch tracking for `twoFinger`. Both call the controller's scale methods, but they calculate touch movement and manage their lifetimes differently. Wheel and pointer-scale input use additional handlers in the same render widget.
-
-## Ownership
+## Library boundary
 
 | Component | Owns |
 | --- | --- |
-| `LazyCanvas` | Viewport composition, lazy rendering, child layout, painting, and hit testing |
-| Navigation handling | Contact tracking, recognition, sample coordination, and gesture lifetime |
-| `LazyCanvasController` | Applying viewport transforms, coordinate conversion, zoom limits, animation, and inertia |
-| Application | Deciding whether input navigates or performs an application action; coordinating its own interrupted operations |
+| `LazyCanvas` | Viewport composition, lazy rendering, layout, painting, hit testing, and controller attachment |
+| Default navigation wrapper | Gesture recognition, contact tracking, sample coordination, pointer signals, and navigation lifetime |
+| `LazyCanvasController` | Viewport transforms, coordinate conversion, zoom limits, animation, and inertia |
+| Custom navigation wrapper | Its own recognition, application interruption rules, and pointer signals, using controller operations |
 
-Different devices can have different input adapters. They must use the same viewport transform operations. All touch navigation must share contact geometry and sample coordination, regardless of how many contacts were required to start it.
+Grid does not provide forced child-drag takeover, fixed finger pairs, release locking, or stationary-finger anchoring policies. Applications requiring those behaviors replace the navigation wrapper. There is no public policy framework or smoothing configuration.
 
-## Public behavior and overrides
+## API and composition
 
-Start with a small API rather than a general gesture framework:
+`navigationBuilder` has type `Widget Function(BuildContext context, Widget child)?`:
 
-- Default to one-finger panning, pinch zoom, mouse dragging, wheel scrolling, and trackpad navigation. Respect child gesture recognition and nested scrolling.
-- Provide an admission callback with the device kind, buttons, contact count, canvas-local position, and relevant modifier state. Evaluate admission when navigation could start and when contacts change. Continue tracking candidate contacts after rejection so a second finger can qualify later. Once admitted, maintain a defined lifetime rather than repeatedly toggling navigation on every move.
-- Report navigation start, update, end, and cancellation consistently. Distinguish a normal release from cancellation, and identify participating pointers when application coordination needs them.
-- Keep wheel replacement behavior available. Treat pan and scale as one transform update so separate handlers cannot apply inconsistent anchors or duplicate movement.
-- Provide a focal-point override for the stationary-finger behavior already covered by tests. Supply previous and current received contact positions in local coordinates; keep sample coordination private and apply the chosen anchor through the shared transform operation.
-- Let consumers disable built-in navigation and use their own Flutter input handling against the same controller operations. This is the escape hatch for custom recognition; do not add a callback for every internal sampling decision.
+- Omitted: install the default navigation wrapper.
+- Supplied: replace all default touch, mouse, trackpad, wheel, and control-wheel navigation.
+- Returning `child` unchanged disables built-in navigation.
 
-Remove `TouchNavigationMode` once its consumers are covered by these controls. Do not retain separate one-finger and two-finger engines behind renamed options.
+The child includes `viewportBuilder` content, so composed controls share the navigation region. Raw controller pointer callbacks remain outside the wrapper as observers; they fire once and do not move the viewport. `mousePanButtons` and `onPointerScroll` configure only the default wrapper. Existing controller scale, scroll, animation, and inertia methods remain available to custom Flutter gesture handlers.
 
-A two-contact admission rule does not imply taking over an existing child drag. Raw observation does not cancel child recognizers or stop pointer delivery. Any forced takeover must be an explicit integration contract that requires application cooperation, with documented callback ordering. It must not be a side effect of the contact count.
+Remove `TouchNavigationMode` and `onTouchNavigationChanged`. Custom gesture recognition does not inherit grid's internal sample coordination. This is an intentional consequence of full replacement, documented in the README and demonstrated by the Navigation example.
 
-Normal navigation should transition between one and two contacts without a viewport jump. Freezing until every contact releases, retaining only the original pair, and disabling inertia for every two-contact gesture are optional policies rather than universal behavior. Preserve tests for these policies in explicit fixtures when supported. Keep their implementation out of the rendering code.
+## Default motion
 
-## Shared motion handling
+One touch pans; multiple participating touches pan and pinch together. Recognition uses Flutter's thresholds and normal gesture arbitration. A winning child keeps its gesture. Qualifying movement includes the full displacement, and recognized movement has no additional dead zone.
 
-The removed frame coordination addressed incomplete contact samples: one finger's update can arrive before the other's, briefly making a pan resemble a pinch. This is separate from easing or inertia.
+All participating contacts contribute to the centroid and mean radius. Adding or removing a contact rebases without moving the viewport; survivors and replacement contacts can continue. Centroid anchoring applies even when a finger stays still. Mouse-button, trackpad, and stylus defaults remain consistent with the previous API. Ordinary wheel input preserves both axes.
 
-Use one internal touch calculation path. A single participating contact produces translation. Two participating contacts produce translation and scale together. Changing the contact set establishes a new baseline without changing the current viewport. Define how additional contacts participate without allowing them to cause a discontinuity.
+Use one touch recognizer in `lib/core/navigation.dart`. Device adapters may differ, but all use the controller's existing combined pan/scale transform operations. Keep the recognizers and sampling helpers private.
 
-Keep sample coordination private and bounded. Equivalent received input must receive equivalent treatment; the implementation cannot know whether an absent partner update will arrive. If waiting for a partner is necessary, retain the existing maximum of one additional display frame. New input must not renew an older sample's deadline. Do not add pan-versus-pinch locking, a movement dead zone after recognition, or animation that continues toward stale targets while fingers are still down.
+Coordinate multi-contact snapshots on display frames. Group updates from distinct contacts; a repeated contact begins a new snapshot. Complete snapshots can apply on the next frame. Incomplete snapshots wait at most one additional frame, and newer input cannot renew an older deadline. Apply the newest eligible snapshot while retaining newer incomplete input. Single-contact movement needs no partner wait.
 
-Apply zoom limits and panning together. Coincident contacts must remain finite and preserve usable scale references. Cancel pending work on disposal or controller replacement so no late transform reaches a detached controller. Normal release must account for final received movement; cancellation must not start inertia.
+Flush received motion before contact-set changes, normal release, or cancellation. Preserve usable pinch references through coincident contacts; with no minimum scale, keep the last positive scale while continuing translation. Initially coincident contacts establish a span without a zoom jump. Apply clamping and panning together in local coordinates.
 
-Use centroid anchoring as the default geometry. Stationary-finger anchoring, especially during diagonal movement, is a distinct behavior choice. Retain its tests under an explicit anchoring override rather than silently imposing it on all consumers. The override must reuse shared tracking and transforms.
+Pure translation may end with inertia. Any scaling or cancellation suppresses inertia for that gesture. Track cumulative translation for velocity so contact changes cannot manufacture a fling. A new pointer stops animation. Controller replacement and disposal discard queued work; held pointers cannot continue the detached recognizer.
 
-## Implementation sequence
+## Test migration
 
-1. **Record the baseline.** Run the retained touch suites and record failures by behavior. Keep the tests byte-for-byte unchanged during the rollback. Capture a short manual reproduction of jittery pinch translation before changing navigation.
-2. **Separate input from rendering.** Move navigation code out of `render.dart` into one focused implementation file. Reuse the controller's existing transform and inertia machinery. Avoid adding a second controller or exporting internal helpers.
-3. **Unify touch calculations.** Route one-contact and multi-contact movement through shared tracking, baseline transitions, sample coordination, and combined transform updates. Resolve coordinate-space and anchoring errors at this boundary. Preserve different device adapters where needed.
-4. **Add admission and lifecycle overrides.** Cover default navigation, rejected single-contact navigation followed by admitted two-contact navigation, and custom input with built-in navigation disabled. Replace the mode-specific API and document cancellation and child interaction.
-5. **Separate policy tests.** Keep general motion acceptance tests on the defaults and on the two-contact admission override. Move policy-specific expectations into explicitly configured fixtures. Preserve their behavioral assertions and independent rendered-motion checks. Update tests only as required by the new API or an explicitly documented default change.
-6. **Update the example and documentation.** Show the defaults, a two-contact admission override, and custom navigation driving the existing controller. Remove instructions that require every consumer to guard its input because of an implicit takeover mode.
+Keep the independent geometry oracle, rendered landmark checks, negative controls, input order variations, and 60/120 Hz frame schedules. Correct endpoints do not establish stable intermediate motion. Do not loosen geometry tolerances or skip failing assertions.
 
-Complete the steps in order, with the refactor and motion fix reviewed as distinct changes where practical. The rollback itself leaves the original issue open.
-
-## Test coverage to retain
-
-| Coverage | Placement after refactor |
+| Previous coverage | Replacement or retained behavior |
 | --- | --- |
-| Pan without temporary zoom pulses; pinch with stable translation | Shared touch behavior, including navigation that starts with one contact |
-| Independent input/display timing at 60 and 120 Hz; response deadlines | Shared multi-contact sampling |
-| Zoom limits, subpixel movement, coincident contacts, and rotation without zoom | Shared transform behavior |
-| Stationary-finger anchoring and anchor transitions | Explicit anchoring behavior |
-| Fixed original pair, ignored extra contacts, and drain-until-release | Explicit contact-lifetime behavior |
-| Ownership before raw delivery and takeover after a child wins | Explicit takeover integration |
-| Release/cancel, controller replacement, disposal, and late callbacks | Shared lifecycle plus relevant policy fixtures |
-| Mouse buttons, trackpad, wheel replacement, and nested scrolling | Device adapters and child cooperation |
+| Pan/pinch timing, subpixel motion, zoom limits, coincidence, and rotation | Retain against default navigation, establishing recognition before motion-only traces |
+| Stationary-finger and diagonal traces | Retain the input traces with centroid-based expected geometry |
+| Stationary-anchor drift negative control | Detect incorrect centroid geometry despite a correct endpoint |
+| Fixed pair, ignored contacts, and drain-until-release | Verify continuous one/two/three-contact transitions, cancellation, and replacement contacts without jumps |
+| Forced takeover after a child wins | Verify that a winning child keeps its drag |
+| Mode changes during a held sequence | Verify default-wrapper replacement, disabling, and controller replacement without stale input |
+| Overlay navigation region | Verify both default and custom wrappers receive composed content |
+| Wheel and raw callbacks | Verify both-axis scrolling, replacement handlers, child consumption, and exactly-once observation |
+| Custom navigation | Verify custom transforms/signals and absence of every default input path with an identity wrapper |
+| Inertia | Verify normal translation, contact rebasing, cancellation, and scaling behavior |
 
-Keep the independent geometry oracle, rendered landmark checks, and negative controls that prove transient errors are detected. Correct endpoints alone do not establish smooth motion. Add focused tests for one-to-two-to-one contact transitions and for callback ordering when navigation is rejected, starts, ends, or is canceled.
+The old count of 124 tests is not an acceptance target. Each changed policy assertion must have a behavioral replacement or a documented removal of the unsupported policy. Unrelated package tests must continue passing.
 
-## Validation and completion
+## Delivery and validation
 
-Use Chrome for interaction tests:
+1. Separate the default navigation wrapper from rendering and add `navigationBuilder`.
+2. Unify touch recognition, contact rebasing, and bounded sample coordination.
+3. Migrate policy tests and add wrapper, child-cooperation, and transition tests.
+4. Update the README and example with default, disabled, and custom navigation.
+5. Run focused Chrome checks during implementation; finish with analysis, one full Chrome test run, and an example web build.
 
 ```sh
-flutter test --platform chrome test/touch_navigation_test.dart test/touch_lifecycle_test.dart test/canvas_view_test.dart
+flutter test --platform chrome test/navigation_test.dart test/touch_navigation_test.dart test/touch_lifecycle_test.dart test/canvas_view_test.dart
 flutter analyze
+flutter test --platform chrome
+cd example
+flutter build web
 ```
 
-During implementation, run the relevant files. Before committing the completed feature or fix, run the full package suite once in Chrome and build the example for web. Verify pinch translation manually with real touch input; browser replay is a regression check, not a substitute for device validation.
+Real-device pinch translation remains a separate manual acceptance check. Record it as unverified if no physical touch device is available. Do not change Elseplane or publish a release as part of this refactor.
 
-Completion means shared touch motion is stable under the retained frame-by-frame checks, default and overridden navigation reuse the same calculations, and application-specific contact policies no longer determine the library's internal engine. The current rollback is deliberately short of that state.
+## Validation result
+
+Implementation completed on 2026-10-29. The full Chrome suite passed all 176 tests with no skips, `flutter analyze --no-pub` reported no issues, and the example's `flutter build web` succeeded. Physical touch-device validation remains unverified.

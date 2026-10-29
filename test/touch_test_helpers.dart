@@ -28,6 +28,7 @@ Future<void> pumpTouchCanvas(
   LazyCanvasController? controller,
 }) async {
   controller ??= LazyCanvasController(
+    inertiaEnabled: false,
     minScale: 0.5,
     buildExtentMultiplier: 3.4,
     maxScale: 2,
@@ -40,14 +41,24 @@ Future<void> pumpTouchCanvas(
     );
   }
   await tester.pumpWidget(
-    MaterialApp(
-      home: LazyCanvas(
-        controller: controller,
-        touchNavigationMode: TouchNavigationMode.twoFinger,
-      ),
-    ),
+    MaterialApp(home: LazyCanvas(controller: controller)),
   );
   await tester.pumpAndSettle();
+}
+
+/// Cross the normal drag threshold, then return to the initial viewport.
+/// Subsequent traces test recognized motion rather than gesture admission.
+Future<TestGesture> startTouchNavigation(
+  WidgetTester tester,
+  Offset position, {
+  required int pointer,
+}) async {
+  final gesture = await tester.startGesture(position, pointer: pointer);
+  await gesture.moveBy(const Offset(40, 0));
+  await tester.pump();
+  await gesture.moveTo(position);
+  await tester.pump();
+  return gesture;
 }
 
 TouchView touchView(LazyCanvasController controller) =>
@@ -68,16 +79,6 @@ TouchView expectedTouchView(
       (initial.$2 - initial.$1).distance;
   final anchor = start.offset + initialCenter / start.scale;
   return (offset: anchor - currentCenter / scale, scale: scale);
-}
-
-TouchView stationaryTouchView(
-  TouchView start,
-  TouchTouches initial,
-  TouchTouches current,
-) {
-  final scale = expectedTouchView(start, initial, current).scale;
-  final anchor = start.offset + initial.$1 / start.scale;
-  return (offset: anchor - initial.$1 / scale, scale: scale);
 }
 
 // Compare against an independently bounded segment of stable viewport transforms.

@@ -17,16 +17,20 @@ void main() {
     final interval = Duration(microseconds: (1000000 / hz).round());
     for (final canceled in [false, true]) {
       testWidgets(
-        'queued motion survives ${canceled ? 'cancel' : 'release'} and stays frozen at $hz Hz',
+        'queued motion survives ${canceled ? 'cancel' : 'release'} and remaining contact pans at $hz Hz',
         (tester) async {
           await pumpTouchCanvas(tester);
           final controller = _controller(tester);
           final start = touchView(controller);
-          final first = await tester.startGesture(initial.$1, pointer: 1);
+          final first = await startTouchNavigation(
+            tester,
+            initial.$1,
+            pointer: 1,
+          );
           final second = await tester.startGesture(initial.$2, pointer: 2);
           const delta = Offset(20, 10);
           await second.moveBy(delta);
-          final target = stationaryTouchView(start, initial, (
+          final target = expectedTouchView(start, initial, (
             initial.$1,
             initial.$2 + delta,
           ));
@@ -43,7 +47,11 @@ void main() {
           );
           await first.moveBy(const Offset(40, 20));
           await first.up();
-          await pumpTouchHold(tester, expected: target, frameHz: hz);
+          final continued = (
+            offset: target.offset - const Offset(40, 20) / target.scale,
+            scale: target.scale,
+          );
+          await pumpTouchHold(tester, expected: continued, frameHz: hz);
         },
       );
     }
@@ -54,7 +62,7 @@ void main() {
       await pumpTouchCanvas(tester);
       final controller = _controller(tester);
       final start = touchView(controller);
-      final first = await tester.startGesture(initial.$1, pointer: 1);
+      final first = await startTouchNavigation(tester, initial.$1, pointer: 1);
       final second = await tester.startGesture(initial.$2, pointer: 2);
       const delta = Offset(20, 10);
       await second.moveBy(delta);
@@ -65,7 +73,7 @@ void main() {
         'the ambiguous first frame stays stable',
       );
       await second.moveBy(delta);
-      final due = stationaryTouchView(start, initial, (
+      final due = expectedTouchView(start, initial, (
         initial.$1,
         initial.$2 + delta,
       ));
@@ -79,7 +87,7 @@ void main() {
           'old sample must respond despite newer input',
         )
         ..verify();
-      final target = stationaryTouchView(start, initial, (
+      final target = expectedTouchView(start, initial, (
         initial.$1,
         initial.$2 + delta * 2,
       ));
@@ -99,7 +107,11 @@ void main() {
         await pumpTouchCanvas(tester);
         final controller = _controller(tester);
         final start = touchView(controller);
-        final first = await tester.startGesture(initial.$1, pointer: 1);
+        final first = await startTouchNavigation(
+          tester,
+          initial.$1,
+          pointer: 1,
+        );
         final second = await tester.startGesture(initial.$2, pointer: 2);
         const delta = Offset(20, 10);
         await first.moveBy(delta);
@@ -145,7 +157,11 @@ void main() {
             await pumpTouchCanvas(tester);
             final controller = _controller(tester);
             final start = touchView(controller);
-            final first = await tester.startGesture(initial.$1, pointer: 1);
+            final first = await startTouchNavigation(
+              tester,
+              initial.$1,
+              pointer: 1,
+            );
             final second = await tester.startGesture(initial.$2, pointer: 2);
             const delta = Offset(20, 10);
             await first.moveBy(delta);
@@ -211,143 +227,8 @@ void main() {
     }
   }
 
-  for (final hz in [60, 120]) {
-    testWidgets(
-      'stationary and moving anchors transition continuously at $hz Hz',
-      (tester) async {
-        await pumpTouchCanvas(tester);
-        final controller = _controller(tester);
-        final start = touchView(controller);
-        final first = await tester.startGesture(initial.$1, pointer: 1);
-        final second = await tester.startGesture(initial.$2, pointer: 2);
-        final spread = (initial.$1, initial.$2 + const Offset(40, 20));
-        await second.moveTo(spread.$2);
-        final anchoredFirst = stationaryTouchView(start, initial, spread);
-        await pumpTouchResponse(
-          tester,
-          previous: start,
-          target: anchoredFirst,
-          frameHz: hz,
-        );
-        await pumpTouchHold(tester, expected: anchoredFirst, frameHz: hz);
-
-        const pan = Offset(30, -10);
-        final moving = (
-          spread.$1 + pan - const Offset(10, 0),
-          spread.$2 + pan + const Offset(10, 0),
-        );
-        final beforeCenter = (spread.$1 + spread.$2) / 2;
-        final center = (moving.$1 + moving.$2) / 2;
-        final centerWorld =
-            anchoredFirst.offset + beforeCenter / anchoredFirst.scale;
-        final movingScale =
-            start.scale *
-            (moving.$2 - moving.$1).distance /
-            (initial.$2 - initial.$1).distance;
-        final centered = (
-          offset: centerWorld - center / movingScale,
-          scale: movingScale,
-        );
-        await first.moveTo(moving.$1);
-        await second.moveTo(moving.$2);
-        await pumpTouchResponse(
-          tester,
-          previous: anchoredFirst,
-          target: centered,
-          frameHz: hz,
-        );
-        await pumpTouchHold(tester, expected: centered, frameHz: hz);
-
-        final finalFirst = moving.$1 + const Offset(-30, 10);
-        final secondWorld = centered.offset + moving.$2 / centered.scale;
-        final finalScale =
-            start.scale *
-            (moving.$2 - finalFirst).distance /
-            (initial.$2 - initial.$1).distance;
-        final anchoredSecond = (
-          offset: secondWorld - moving.$2 / finalScale,
-          scale: finalScale,
-        );
-        await first.moveTo(finalFirst);
-        await pumpTouchResponse(
-          tester,
-          previous: centered,
-          target: anchoredSecond,
-          frameHz: hz,
-        );
-        await second.up();
-        await first.up();
-        await pumpTouchHold(tester, expected: anchoredSecond, frameHz: hz);
-      },
-    );
-  }
-
-  // ---------- Fixed pair and lifetime ----------
-
-  for (final removed in [0, 1]) {
-    testWidgets(
-      'extra contacts are ignored and never replace original finger ${removed + 1}',
-      (tester) async {
-        await pumpTouchCanvas(tester);
-        final controller = _controller(tester);
-        final start = touchView(controller);
-        final fingers = [
-          await tester.startGesture(initial.$1, pointer: 1),
-          await tester.startGesture(initial.$2, pointer: 2),
-        ];
-        final extra = await tester.startGesture(
-          const Offset(600, 450),
-          pointer: 3,
-        );
-        await extra.moveBy(const Offset(100, -30));
-        await pumpTouchHold(tester, expected: start);
-        const delta = Offset(20, 10);
-        await fingers[0].moveBy(delta);
-        await fingers[1].moveBy(delta);
-        final target = (
-          offset: start.offset - delta / start.scale,
-          scale: start.scale,
-        );
-        await pumpTouchResponse(tester, previous: start, target: target);
-        await fingers[removed].up();
-        await fingers[1 - removed].moveBy(delta);
-        await extra.moveBy(delta);
-        await pumpTouchHold(tester, expected: target);
-        await fingers[1 - removed].up();
-        await extra.up();
-        await pumpTouchHold(tester, expected: target);
-      },
-    );
-  }
-
   testWidgets(
-    'lifting an ignored contact leaves the original pair in control',
-    (tester) async {
-      await pumpTouchCanvas(tester);
-      final controller = _controller(tester);
-      final start = touchView(controller);
-      final first = await tester.startGesture(initial.$1, pointer: 1);
-      final second = await tester.startGesture(initial.$2, pointer: 2);
-      final extra = await tester.startGesture(
-        const Offset(600, 450),
-        pointer: 3,
-      );
-      await extra.cancel();
-      const delta = Offset(20, 10);
-      await first.moveBy(delta);
-      await second.moveBy(delta);
-      final target = (
-        offset: start.offset - delta / start.scale,
-        scale: start.scale,
-      );
-      await pumpTouchResponse(tester, previous: start, target: target);
-      await first.up();
-      await second.up();
-    },
-  );
-
-  testWidgets(
-    'controller replacement discards queued motion and drains held fingers',
+    'controller replacement discards queued motion and ignores held fingers',
     (tester) async {
       final old = LazyCanvasController(
         minScale: 0.5,
@@ -355,7 +236,7 @@ void main() {
         buildExtentMultiplier: 3.4,
       );
       await pumpTouchCanvas(tester, controller: old);
-      final first = await tester.startGesture(initial.$1, pointer: 1);
+      final first = await startTouchNavigation(tester, initial.$1, pointer: 1);
       final second = await tester.startGesture(initial.$2, pointer: 2);
       await second.moveBy(const Offset(30, 20));
       final replacement = LazyCanvasController(
@@ -378,7 +259,7 @@ void main() {
         offset: Offset.zero,
         scale: 1,
       ), 'no late writes to detached controller');
-      final fresh = await tester.startGesture(initial.$1, pointer: 3);
+      final fresh = await startTouchNavigation(tester, initial.$1, pointer: 3);
       final partner = await tester.startGesture(initial.$2, pointer: 4);
       const delta = Offset(20, 10);
       await fresh.moveBy(delta);
@@ -399,7 +280,7 @@ void main() {
   testWidgets('disposal cancels pending frame callbacks', (tester) async {
     await pumpTouchCanvas(tester);
     final controller = _controller(tester);
-    final first = await tester.startGesture(initial.$1, pointer: 1);
+    final first = await startTouchNavigation(tester, initial.$1, pointer: 1);
     final second = await tester.startGesture(initial.$2, pointer: 2);
     await second.moveBy(const Offset(30, 20));
     final start = touchView(controller);
@@ -420,7 +301,7 @@ void main() {
     (tester) async {
       final controller = LazyCanvasController(buildExtentMultiplier: 3.4);
       await pumpTouchCanvas(tester, controller: controller);
-      final first = await tester.startGesture(initial.$1, pointer: 1);
+      final first = await startTouchNavigation(tester, initial.$1, pointer: 1);
       final second = await tester.startGesture(initial.$2, pointer: 2);
       final start = touchView(controller);
       await first.moveTo(const Offset(370, 340));

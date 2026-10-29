@@ -2,6 +2,7 @@ import 'simple_example.dart';
 import './caching_test.dart';
 import './dynamic_widget_example.dart';
 import './render_callbacks_example.dart';
+import 'navigation_example.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -53,6 +54,11 @@ class ExampleChooser extends StatelessWidget {
               child: const Text('Render Callbacks Demo'),
             ),
             const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: () => _open(context, const NavigationExample()),
+              child: const Text('Navigation'),
+            ),
+            const SizedBox(height: 16),
             const Padding(
               padding: EdgeInsets.all(16.0),
               child: Text(
