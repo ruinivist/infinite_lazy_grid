@@ -39,6 +39,8 @@ class LazyCanvasController with ChangeNotifier {
   double? _lastProcessedScale;
   bool _markDirty =
       false; // do any of the non scale or offset changes require a rebuild?
+  bool _childMeasurementNotificationPending = false;
+  bool _disposed = false;
   final bool useIdsFromArgs;
   OnWidgetEnteredRender? onWidgetEnteredRender;
   OnWidgetExitedRender? onWidgetExitedRender;
@@ -56,6 +58,9 @@ class LazyCanvasController with ChangeNotifier {
   final double inertiaFrictionCoefficient;
   final double buildExtentMultiplier;
 
+  /// Minimum horizontal culling padding in logical screen pixels per side.
+  final double minHorizontalBuildPadding;
+
   /// Minimum zoom scale, or null for no lower limit.
   final double? minScale;
 
@@ -69,6 +74,7 @@ class LazyCanvasController with ChangeNotifier {
     this.maxScale,
     this.debug = false,
     this.buildExtentMultiplier = 2,
+    this.minHorizontalBuildPadding = 200,
     Size hashCellSize = const Size(100, 100),
     this.defaultAnimationDuration = const Duration(milliseconds: 300),
     this.inertiaEnabled = true,
@@ -86,6 +92,13 @@ class LazyCanvasController with ChangeNotifier {
        assert(inertiaFrictionCoefficient > 0 && inertiaFrictionCoefficient < 1),
        _background = background,
        _spatialHash = SpatialHashing<CanvasChildId>(cellSize: hashCellSize) {
+    if (!minHorizontalBuildPadding.isFinite || minHorizontalBuildPadding < 0) {
+      throw ArgumentError.value(
+        minHorizontalBuildPadding,
+        'minHorizontalBuildPadding',
+        'Must be finite and nonnegative',
+      );
+    }
     if (minScale != null && (!minScale!.isFinite || minScale! <= 0)) {
       throw ArgumentError.value(
         minScale,
@@ -109,9 +122,6 @@ class LazyCanvasController with ChangeNotifier {
     }
     _baseScale = _scale = _clampScale(1);
   }
-  // only top left is considered so if a widget has long width, it'll not be rendered
-  // unless the cache extent is sufficient
-
   // ==================== Getters ====================
   Offset get offset => _gsTopLeftOffset;
   double get scale => _scale;
@@ -122,10 +132,18 @@ class LazyCanvasController with ChangeNotifier {
       _lastProcessedOffset != _gsTopLeftOffset ||
       _lastProcessedScale != _scale ||
       _markDirty;
-  Offset get buildExtent =>
-      Offset(_canvasSize.width, _canvasSize.height) /
-      _scale *
-      buildExtentMultiplier;
+  Offset get buildExtent {
+    final horizontalPadding = max(
+      _canvasSize.width * (buildExtentMultiplier - 1) / 2,
+      minHorizontalBuildPadding,
+    );
+    return Offset(
+          _canvasSize.width + 2 * horizontalPadding,
+          _canvasSize.height * buildExtentMultiplier,
+        ) /
+        _scale;
+  }
+
   CanvasBackground get background => _background;
 
   /// Immutable back-to-front snapshot of all children, including culled children.
@@ -152,12 +170,24 @@ class LazyCanvasController with ChangeNotifier {
 
     _canvasSize = size; // allow resize due to canvas resize
     _init = true;
-    Future.microtask(markDirty);
+    Future.microtask(() {
+      if (!_disposed) markDirty();
+    });
   }
 
   /// Called when a child widget's size changes.
   void onChildSizeChange(CanvasChildId id, Size size) {
-    _children[id]!.lastRenderedSize = size;
+    final child = _children[id];
+    if (child == null || child.lastRenderedSize == size) return;
+    final bounds = _childBounds(child.gsPosition, size, child.rotation);
+    _spatialHash.set(id, bounds);
+    child.lastRenderedSize = size;
+    if (_childMeasurementNotificationPending) return;
+    _childMeasurementNotificationPending = true;
+    Future.microtask(() {
+      _childMeasurementNotificationPending = false;
+      if (!_disposed) markDirty();
+    });
   }
 
   /// Set the ticker provider for animations.
@@ -187,6 +217,12 @@ class LazyCanvasController with ChangeNotifier {
     notifyListeners();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   // ==================== Child Management ====================
 
   /// Add a child at a given position with a widget. Returns the child ID.
@@ -199,12 +235,14 @@ class LazyCanvasController with ChangeNotifier {
     double rotation = 0,
     CanvasChildId? id,
   }) {
+    final bounds = _childBounds(position, childSize, rotation);
     final childId = _addChildInternal(
       position,
       widget,
       childSize: childSize,
       rotation: rotation,
       id: id,
+      bounds: bounds,
     );
     markDirty();
     return childId;
@@ -216,25 +254,20 @@ class LazyCanvasController with ChangeNotifier {
     Size? childSize,
     double rotation = 0,
     CanvasChildId? id,
+    required Rect bounds,
   }) {
-    _validateGeometry(
-      position: position,
-      rotation: rotation,
-      childSize: childSize,
-    );
     assert(!useIdsFromArgs || useIdsFromArgs && id != null);
     id ??= _uuid.v4();
-    _children[id] = _ChildInfo(
+    final child = _ChildInfo(
       gsPosition: position,
       rotation: rotation,
       widget: widget,
       lastRenderedSize: childSize,
-      paintOrder: _nextPaintOrder++,
+      paintOrder: _nextPaintOrder,
     );
-    _spatialHash.add(
-      Point(position.dx, position.dy),
-      id,
-    ); // add to spatial hash
+    _spatialHash.set(id, bounds);
+    _children[id] = child;
+    _nextPaintOrder++;
     return id;
   }
 
@@ -242,15 +275,15 @@ class LazyCanvasController with ChangeNotifier {
     List<CanvasChildArgs> children, {
     CanvasChildId? focusOnBuild,
   }) {
+    final childBounds = <Rect>[];
     for (final child in children) {
-      _validateGeometry(
-        position: child.position,
-        rotation: child.rotation,
-        childSize: child.childSize,
+      childBounds.add(
+        _childBounds(child.position, child.childSize, child.rotation),
       );
     }
     final ids = <CanvasChildId>[];
-    for (final child in children) {
+    for (var index = 0; index < children.length; index++) {
+      final child = children[index];
       ids.add(
         _addChildInternal(
           child.position,
@@ -258,6 +291,7 @@ class LazyCanvasController with ChangeNotifier {
           childSize: child.childSize,
           rotation: child.rotation,
           id: child.id,
+          bounds: childBounds[index],
         ),
       );
     }
@@ -272,8 +306,7 @@ class LazyCanvasController with ChangeNotifier {
     if (child == null) {
       throw _ChildNotFoundException;
     }
-    final position = child.gsPosition;
-    _spatialHash.remove(Point(position.dx, position.dy), id);
+    _spatialHash.remove(id);
     _children.remove(id);
     markDirty();
   }
@@ -475,10 +508,19 @@ class LazyCanvasController with ChangeNotifier {
   void moveChildrenBy(Iterable<CanvasChildId> ids, Offset gridDelta) {
     _validateGeometry(position: gridDelta);
     final positions = <CanvasChildId, Offset>{};
+    final bounds = <CanvasChildId, Rect>{};
     for (final id in ids.toSet()) {
-      final position = _requireChild(id).gsPosition + gridDelta;
+      final child = _requireChild(id);
+      final position = child.gsPosition + gridDelta;
       _validateGeometry(position: position);
       positions[id] = position;
+      if (position != child.gsPosition) {
+        bounds[id] = _childBounds(
+          position,
+          child.lastRenderedSize,
+          child.rotation,
+        );
+      }
     }
     var changed = false;
     for (final entry in positions.entries) {
@@ -487,6 +529,7 @@ class LazyCanvasController with ChangeNotifier {
             _children[entry.key]!,
             entry.key,
             position: entry.value,
+            bounds: bounds[entry.key],
           ) ||
           changed;
     }
@@ -527,6 +570,7 @@ class LazyCanvasController with ChangeNotifier {
     double? rotation,
     Size? childSize,
     Widget? widget,
+    Rect? bounds,
   }) {
     final positionChanged = position != null && position != child.gsPosition;
     final sizeChanged =
@@ -539,16 +583,43 @@ class LazyCanvasController with ChangeNotifier {
         !widgetChanged) {
       return false;
     }
+    final geometryChanged = positionChanged || sizeChanged || rotationChanged;
+    final newBounds = geometryChanged
+        ? bounds ??
+              _childBounds(
+                position ?? child.gsPosition,
+                childSize ?? child.lastRenderedSize,
+                rotation ?? child.rotation,
+              )
+        : null;
+    if (newBounds != null) _spatialHash.set(id, newBounds);
     if (positionChanged) {
-      final oldPosition = child.gsPosition;
-      _spatialHash.remove(Point(oldPosition.dx, oldPosition.dy), id);
       child.gsPosition = position;
-      _spatialHash.add(Point(position.dx, position.dy), id);
     }
     child.lastRenderedSize = childSize ?? child.lastRenderedSize;
     child.rotation = rotation ?? child.rotation;
     child.widget = widget ?? child.widget;
     return true;
+  }
+
+  Rect _childBounds(Offset position, Size? size, double rotation) {
+    _validateGeometry(position: position, rotation: rotation, childSize: size);
+    if (size == null || size.isEmpty) {
+      return Rect.fromLTWH(position.dx, position.dy, 0, 0);
+    }
+    final bounds = MatrixUtils.transformRect(
+      childTransform(position, size, rotation),
+      Offset.zero & size,
+    );
+    if (!bounds.left.isFinite ||
+        !bounds.top.isFinite ||
+        !bounds.right.isFinite ||
+        !bounds.bottom.isFinite ||
+        bounds.left > bounds.right ||
+        bounds.top > bounds.bottom) {
+      throw ArgumentError.value(bounds, 'bounds', 'Must be finite and ordered');
+    }
+    return bounds;
   }
 
   /// Called when a scale gesture starts.
@@ -672,6 +743,7 @@ class LazyCanvasController with ChangeNotifier {
       final enteredWidgets = newRenderedWidgets.difference(_renderedWidgets);
 
       Future.microtask(() {
+        if (_disposed) return;
         // so that the build is not blocked
         for (final id in exitedWidgets) {
           onWidgetExitedRender?.call(id);
@@ -691,11 +763,13 @@ class LazyCanvasController with ChangeNotifier {
       (extent.dx / 2).ceilToDouble(),
       (extent.dy / 2).ceilToDouble(),
     );
-    final items = _spatialHash.getPointsAround(
-      Point(center.dx, center.dy),
-      halfExtent,
+    final bounds = Rect.fromLTRB(
+      center.dx - halfExtent.dx,
+      center.dy - halfExtent.dy,
+      center.dx + halfExtent.dx,
+      center.dy + halfExtent.dy,
     );
-    return items.map((item) => item.data).toList()..sort(
+    return _spatialHash.query(bounds)..sort(
       (a, b) => _children[a]!.paintOrder.compareTo(_children[b]!.paintOrder),
     );
   }

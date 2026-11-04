@@ -4,6 +4,10 @@
   `onTouchNavigationChanged` arguments from `LazyCanvas`. Touch drag and pinch
   now use Flutter's standard scale gesture recognizer.
 - Add a read-only `overlappingChildren` query for rotated child layout rectangles.
+- Fix culling for known-size children whose origins fall outside the build
+  region by using their rotated layout bounds.
+- Add `minHorizontalBuildPadding`, defaulting to 200 logical screen pixels per
+  side. Values must be finite and nonnegative; use 0 to disable the minimum.
 
 ## 2.0.0
 

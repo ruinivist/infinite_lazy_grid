@@ -785,7 +785,7 @@ void main() {
     expect(find.byType(TestChild), findsNothing);
   });
 
-  testWidgets('builds twice the viewport by default', (
+  testWidgets('default horizontal padding extends narrow viewports', (
     WidgetTester tester,
   ) async {
     final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
@@ -806,7 +806,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('test_child_0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('test_child_1')), findsNothing);
+    expect(find.byKey(const ValueKey('test_child_1')), findsOneWidget);
   });
 
   testWidgets('updates the build region after viewport resize', (
@@ -841,8 +841,11 @@ void main() {
   testWidgets('keeps the build region relative while zooming', (
     WidgetTester tester,
   ) async {
-    final controller = LazyCanvasController(hashCellSize: const Size(10, 10));
-    controller.addChild(const Offset(250, 0), const TestChild(index: 0));
+    final controller = LazyCanvasController(
+      hashCellSize: const Size(10, 10),
+      minHorizontalBuildPadding: 0,
+    );
+    controller.addChild(const Offset(260, 0), const TestChild(index: 0));
 
     await tester.pumpWidget(
       MaterialApp(

@@ -63,7 +63,8 @@ Upgrade to `infinite_lazy_grid: ^2.0.0`:
 - `updatePosition(id, position)` → `update(id, position: position)`.
 - `updateChildWidget(id, widget)` → `update(id, widget: widget)`.
 - `update()` now returns a boolean.
-- Replace `buildCacheExtent`/`setBuildCacheExtent` with `buildExtentMultiplier` at construction. Default: twice the viewport.
+- Replace `buildCacheExtent`/`setBuildCacheExtent` with `buildExtentMultiplier` at construction. Its default remains `2`, which gives twice the viewport height; horizontal padding also has a 200 logical screen pixel minimum per side by default.
+- `minHorizontalBuildPadding` is a final `double` constructor parameter, defaulting to `200` logical screen pixels per side. It must be finite and nonnegative or construction throws `ArgumentError`. Set it to `0` to opt out of the minimum.
 - `ChildInfo` is now read-only ( as it should've been ). Its constructor needs `rotation` and nullable `childSize`. Its `child` is unwrapped.
 
 ## Usage
@@ -243,13 +244,13 @@ Since the args aren't directly available for you to place in the build tree, chi
 
 `update(id, rotation: angle)` rotates clockwise in radians around the layout center. `addChild` and `CanvasChildArgs` also accept `rotation` (default `0`); position and layout size stay unchanged.
 
-### Size based optimisations
+### Size-based culling
 
-Children are culled by their unrotated top-left; `buildExtentMultiplier` controls the mounting buffer.
+Children with a known size are culled using their rotated, conservative axis-aligned layout bounds. The bounds include layout only, not paint overflow such as shadows. The controller uses a supplied `childSize` or a size measured during normal layout. Measured sizes remain cached after culling; update a child's geometry with `update(...)` if it changes while culled.
 
-`focusOnChild` auto measures offstage if size unknown. Provide `childSize` if you already know it to skip the extra pass.
+Children with unknown or empty sizes are discovered by their origin. A wide child with an unknown size can be missed on first approach until its origin enters the build region and normal layout measures it. Supplying `childSize` avoids this gap when it matches the actual layout. Culling does not cause extra measurement. `focusOnChild` keeps its existing offstage measurement behavior when it needs a size.
 
-This extra pass is cached so would only happen once per child if size not provided.
+`minHorizontalBuildPadding` sets the minimum horizontal culling padding in logical screen pixels per side. It defaults to `200`, must be finite and nonnegative, and throws `ArgumentError` otherwise. Pass `minHorizontalBuildPadding: 0` to disable the minimum and use only `buildExtentMultiplier`.
 
 ## Example
 

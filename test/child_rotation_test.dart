@@ -429,10 +429,13 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('rotation keeps mounting based on the unrotated top-left', (
+  testWidgets('known rotated bounds can mount before the child origin', (
     tester,
   ) async {
-    final controller = LazyCanvasController(buildExtentMultiplier: 1);
+    final controller = LazyCanvasController(
+      buildExtentMultiplier: 1,
+      minHorizontalBuildPadding: 0,
+    );
     var builds = 0;
     final id = controller.addChild(
       const Offset(220, 50),
@@ -446,13 +449,15 @@ void main() {
       rotation: pi / 2,
     );
     await pumpCanvas(tester, controller, size: const Size(200, 200));
-    // Rotated bounds overlap, but the origin is outside the build extent.
-    expect(builds, 0);
-    expect(controller.widgetsWithScreenPositions(), isEmpty);
+    // The origin is outside the build extent, but the rotated bounds overlap.
+    expect(builds, 1);
+    expect(controller.widgetsWithScreenPositions().map((info) => info.id), [
+      id,
+    ]);
     expect(controller.getInfo(id).rotation, pi / 2);
     controller.update(id, rotation: pi / 4, childSize: const Size(60, 200));
     await tester.pumpAndSettle();
-    expect(builds, 0);
+    expect(builds, 1);
     controller.update(id, position: const Offset(160, 50));
     await tester.pumpAndSettle();
     expect(builds, 1);
