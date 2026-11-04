@@ -1,5 +1,8 @@
 ## Unreleased
 
+- **Breaking:** Remove `TouchNavigationMode` and the `touchNavigationMode` and
+  `onTouchNavigationChanged` arguments from `LazyCanvas`. Touch drag and pinch
+  now use Flutter's standard scale gesture recognizer.
 - Add a read-only `overlappingChildren` query for rotated child layout rectangles.
 
 ## 2.0.0

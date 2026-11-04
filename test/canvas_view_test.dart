@@ -38,19 +38,27 @@ class TestBackground extends CanvasBackground {
   }
 }
 
+class _RecordingController extends LazyCanvasController {
+  _RecordingController(this.events, {super.rawPointerDownListener});
+
+  final List<String> events;
+
+  @override
+  void stopAnimation() {
+    events.add('stop');
+    super.stopAnimation();
+  }
+}
+
 Future<void> _pumpCanvas(
   WidgetTester tester,
   LazyCanvasController controller, {
-  TouchNavigationMode touchNavigationMode = TouchNavigationMode.oneFinger,
-  ValueChanged<bool>? onTouchNavigationChanged,
   int mousePanButtons = kPrimaryMouseButton,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       home: LazyCanvas(
         controller: controller,
-        touchNavigationMode: touchNavigationMode,
-        onTouchNavigationChanged: onTouchNavigationChanged,
         mousePanButtons: mousePanButtons,
       ),
     ),
@@ -70,11 +78,6 @@ Future<void> _drag(
   );
   await gesture.moveBy(const Offset(40, 30));
   await gesture.up();
-  await tester.pump();
-}
-
-Future<void> _navigationFrames(WidgetTester tester) async {
-  await tester.pump();
   await tester.pump();
 }
 
@@ -144,18 +147,25 @@ void main() {
     expect(pixelAt(50, 140).toARGB32(), Colors.white.toARGB32());
   });
 
-  testWidgets('composed overlays share the viewport touch region', (
+  testWidgets('viewport overlays and canvas children receive touch gestures', (
     tester,
   ) async {
-    final controller = LazyCanvasController();
-    var navigating = false;
+    final controller = LazyCanvasController(inertiaEnabled: false);
     var overlayMoves = 0;
+    var childTaps = 0;
+    controller.addChild(
+      const Offset(200, 100),
+      GestureDetector(
+        key: const ValueKey('canvas child'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => childTaps++,
+        child: const SizedBox(width: 120, height: 120),
+      ),
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: LazyCanvas(
           controller: controller,
-          touchNavigationMode: TouchNavigationMode.twoFinger,
-          onTouchNavigationChanged: (active) => navigating = active,
           viewportBuilder: (context, viewport) => Stack(
             children: [
               viewport,
@@ -166,9 +176,7 @@ void main() {
                 height: 100,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onPanUpdate: (_) {
-                    if (!navigating) overlayMoves++;
-                  },
+                  onPanUpdate: (_) => overlayMoves++,
                 ),
               ),
             ],
@@ -176,307 +184,67 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('canvas child')));
+    expect(childTaps, 1);
+
     final first = await tester.startGesture(const Offset(60, 60), pointer: 1);
     await first.moveBy(const Offset(30, 20));
     await first.moveBy(const Offset(30, 20));
     expect(overlayMoves, greaterThan(0));
-    expect(controller.offset, Offset.zero);
-    final movesBeforeNavigation = overlayMoves;
-    final second = await tester.startGesture(
-      const Offset(400, 300),
-      pointer: 2,
-    );
-    expect(navigating, isTrue);
-    await first.moveBy(const Offset(20, 10));
-    await second.moveBy(const Offset(40, 20));
-    await _navigationFrames(tester);
-    expect(controller.offset, isNot(Offset.zero));
-    expect(overlayMoves, movesBeforeNavigation);
-    await second.up();
     await first.up();
-    expect(navigating, isFalse);
+
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
 
-  testWidgets('two-finger ownership precedes raw delivery and transforms', (
+  testWidgets('touch scale recognizer handles an ordinary pinch', (
     tester,
   ) async {
-    final events = <String>[];
-    final controller = LazyCanvasController(
-      rawPointerDownListener: (_) => events.add('down'),
-      rawPointerMoveListener: (_) => events.add('move'),
-      rawPointerUpListener: (_) => events.add('up'),
-    );
-    controller.addListener(() => events.add('transform'));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Padding(
-          padding: const EdgeInsets.only(left: 60, top: 40),
-          child: LazyCanvas(
-            controller: controller,
-            touchNavigationMode: TouchNavigationMode.twoFinger,
-            onTouchNavigationChanged: (active) => events.add('owner:$active'),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    events.clear();
-
-    final first = await tester.startGesture(const Offset(100, 200), pointer: 1);
-    await first.moveTo(const Offset(100, 220));
-    expect(controller.offset, Offset.zero);
-    expect(controller.scale, 1);
-    expect(events, ['down', 'move']);
-
-    final second = await tester.startGesture(
-      const Offset(300, 220),
-      pointer: 2,
-    );
-    expect(events, ['down', 'move', 'owner:true', 'down']);
-    expect(controller.offset, Offset.zero);
-    expect(controller.scale, 1);
-
-    await first.moveTo(const Offset(50, 220));
-    await second.moveTo(const Offset(350, 220));
-    await _navigationFrames(tester);
-    expect(controller.scale, closeTo(1.5, 1e-9));
-    // The original canvas point beneath the centroid stays beneath it.
-    final centroidCanvasPoint = const Offset(140, 180);
-    final centroidScreenPoint =
-        (centroidCanvasPoint - controller.offset) * controller.scale;
-    expect(centroidScreenPoint.dx, closeTo(140, 1e-9));
-    expect(centroidScreenPoint.dy, closeTo(180, 1e-9));
-
-    await first.moveTo(const Offset(100, 220));
-    await second.moveTo(const Offset(300, 220));
-    await _navigationFrames(tester);
-    expect(controller.scale, closeTo(1, 1e-9));
-    expect(controller.offset.dx, closeTo(0, 1e-9));
-    expect(controller.offset.dy, closeTo(0, 1e-9));
-    await first.moveTo(const Offset(50, 220));
-    await second.moveTo(const Offset(350, 220));
-    await _navigationFrames(tester);
-
-    final beforePan = controller.offset;
-    await first.moveBy(const Offset(30, 40));
-    await second.moveBy(const Offset(30, 40));
-    await _navigationFrames(tester);
-    expect(controller.scale, closeTo(1.5, 1e-9));
-    expect(controller.offset.dx, closeTo(beforePan.dx - 20, 1e-9));
-    expect(controller.offset.dy, closeTo(beforePan.dy - 40 / 1.5, 1e-9));
-    expect(events.indexOf('owner:true'), lessThan(events.indexOf('transform')));
-
-    await second.up();
-    final frozenOffset = controller.offset;
-    final frozenScale = controller.scale;
-    await first.moveBy(const Offset(80, 20));
-    expect(controller.offset, frozenOffset);
-    expect(controller.scale, frozenScale);
-    expect(events.where((event) => event.startsWith('owner')), ['owner:true']);
-    await first.up();
-    expect(events.where((event) => event.startsWith('owner')), [
-      'owner:true',
-      'owner:false',
-    ]);
-    await tester.pump(const Duration(seconds: 1));
-    expect(controller.offset, frozenOffset);
-  });
-
-  testWidgets('ignores extra contacts and drains after cancellation', (
-    tester,
-  ) async {
-    final ownership = <bool>[];
-    final controller = LazyCanvasController();
-    await _pumpCanvas(
-      tester,
-      controller,
-      touchNavigationMode: TouchNavigationMode.twoFinger,
-      onTouchNavigationChanged: ownership.add,
-    );
-    final first = await tester.startGesture(const Offset(100, 200), pointer: 1);
-    final second = await tester.startGesture(
-      const Offset(300, 200),
-      pointer: 2,
-    );
-    await second.moveBy(const Offset(20, 40));
-    await _navigationFrames(tester);
-    final offset = controller.offset;
-    final scale = controller.scale;
-    final third = await tester.startGesture(const Offset(200, 300), pointer: 3);
-    expect(controller.offset, offset);
-    expect(controller.scale, scale);
-    await third.cancel();
-    expect(controller.offset, offset);
-    expect(controller.scale, scale);
-    await first.moveBy(const Offset(0, 30));
-    await _navigationFrames(tester);
-    expect(controller.offset, isNot(offset));
-
-    await second.cancel();
-    final frozen = controller.offset;
-    final extra = await tester.startGesture(const Offset(400, 300), pointer: 4);
-    await extra.moveBy(const Offset(50, 20));
-    await first.moveBy(const Offset(30, 20));
-    expect(controller.offset, frozen);
-    expect(ownership, [true]);
-    await first.cancel();
-    expect(ownership, [true]);
-    await extra.up();
-    expect(ownership, [true, false]);
-
-    final fresh = await tester.startGesture(const Offset(100, 200), pointer: 5);
-    final partner = await tester.startGesture(
-      const Offset(300, 200),
-      pointer: 6,
-    );
-    await partner.moveBy(const Offset(40, 0));
-    await _navigationFrames(tester);
-    expect(controller.offset, isNot(frozen));
-    await fresh.up();
-    await partner.up();
-    expect(ownership, [true, false, true, false]);
-  });
-
-  testWidgets('touch handoff cancels a tool after a child wins its drag', (
-    tester,
-  ) async {
-    var navigating = false;
-    var pendingTool = false;
-    var commits = 0;
-    var childMoves = 0;
-    final controller = LazyCanvasController(
-      rawPointerDownListener: (_) {
-        if (!navigating) pendingTool = true;
-      },
-      rawPointerUpListener: (_) {
-        if (pendingTool) commits++;
-        pendingTool = false;
-      },
-    );
-    controller.addChild(
-      const Offset(100, 100),
-      GestureDetector(
-        onPanUpdate: (_) {
-          if (!navigating) childMoves++;
-        },
-        child: Container(width: 160, height: 160, color: Colors.blue),
-      ),
-    );
-    await _pumpCanvas(
-      tester,
-      controller,
-      touchNavigationMode: TouchNavigationMode.twoFinger,
-      onTouchNavigationChanged: (active) {
-        navigating = active;
-        if (active) pendingTool = false;
-      },
-    );
-    final first = await tester.startGesture(const Offset(120, 120), pointer: 1);
-    await first.moveBy(const Offset(50, 0));
-    await first.moveBy(const Offset(20, 0));
-    expect(childMoves, greaterThan(0));
-    expect(pendingTool, isTrue);
-    expect(controller.offset, Offset.zero);
-    final previousMoves = childMoves;
-
+    final controller = LazyCanvasController(inertiaEnabled: false);
+    await _pumpCanvas(tester, controller);
+    final first = await tester.startGesture(const Offset(200, 200), pointer: 1);
     final second = await tester.startGesture(
       const Offset(400, 200),
       pointer: 2,
     );
-    expect(navigating, isTrue);
-    expect(pendingTool, isFalse);
-    await first.moveBy(const Offset(30, 10));
-    await _navigationFrames(tester);
-    expect(controller.offset, isNot(Offset.zero));
-    expect(childMoves, previousMoves);
+    await first.moveTo(const Offset(150, 200));
+    await second.moveTo(const Offset(450, 200));
+    await tester.pump();
+
+    expect(controller.scale, closeTo(1.5, 1e-9));
     await first.up();
     await second.up();
-    expect(commits, 0);
-    expect(navigating, isFalse);
   });
 
-  testWidgets('snapshots touch mode until release in both directions', (
-    tester,
-  ) async {
-    final controller = LazyCanvasController(inertiaEnabled: false);
-    final mode = ValueNotifier(TouchNavigationMode.twoFinger);
-    addTearDown(mode.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ValueListenableBuilder(
-          valueListenable: mode,
-          builder: (_, value, _) =>
-              LazyCanvas(controller: controller, touchNavigationMode: value),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final first = await tester.startGesture(const Offset(100, 200), pointer: 1);
-    mode.value = TouchNavigationMode.oneFinger;
-    await tester.pump();
-    await first.moveBy(const Offset(40, 20));
-    expect(controller.offset, Offset.zero);
-    final second = await tester.startGesture(
-      const Offset(300, 200),
-      pointer: 2,
-    );
-    await second.moveBy(const Offset(40, 20));
-    await _navigationFrames(tester);
-    expect(controller.offset, isNot(Offset.zero));
-    await first.up();
-    await second.up();
-
-    final next = await tester.startGesture(const Offset(100, 200), pointer: 3);
-    mode.value = TouchNavigationMode.twoFinger;
-    await tester.pump();
-    final before = controller.offset;
-    await next.moveBy(const Offset(40, 20));
-    expect(controller.offset, isNot(before));
-    await next.up();
-    final after = controller.offset;
-    await _drag(tester, kind: PointerDeviceKind.touch, buttons: kPrimaryButton);
-    expect(controller.offset, after);
-  });
-
-  testWidgets('two-finger mode retains other navigation and excludes stylus', (
-    tester,
-  ) async {
-    final ownership = <bool>[];
+  testWidgets('retains other navigation and excludes stylus', (tester) async {
     final controller = LazyCanvasController(inertiaEnabled: false);
     await _pumpCanvas(
       tester,
       controller,
       mousePanButtons: kSecondaryMouseButton | kMiddleMouseButton,
-      touchNavigationMode: TouchNavigationMode.twoFinger,
-      onTouchNavigationChanged: ownership.add,
     );
-    final pen = await tester.startGesture(
-      const Offset(100, 200),
-      pointer: 1,
-      kind: PointerDeviceKind.stylus,
-    );
+    for (final kind in [
+      PointerDeviceKind.stylus,
+      PointerDeviceKind.invertedStylus,
+    ]) {
+      final pen = await tester.startGesture(
+        const Offset(100, 200),
+        pointer: 1,
+        kind: kind,
+      );
+      await pen.moveBy(const Offset(40, 20));
+      expect(controller.offset, Offset.zero);
+      expect(controller.scale, 1);
+      await pen.up();
+    }
     final finger = await tester.startGesture(
       const Offset(300, 200),
       pointer: 2,
     );
-    await pen.moveBy(const Offset(40, 20));
     await finger.moveBy(const Offset(40, 20));
-    expect(controller.offset, Offset.zero);
-    expect(controller.scale, 1);
-    expect(ownership, isEmpty);
-    final secondFinger = await tester.startGesture(
-      const Offset(400, 200),
-      pointer: 3,
-    );
-    await secondFinger.moveBy(const Offset(40, 20));
-    await _navigationFrames(tester);
-    expect(ownership, [true]);
     expect(controller.offset, isNot(Offset.zero));
-    await pen.up();
     await finger.up();
-    await secondFinger.up();
 
     final afterTouch = controller.offset;
     await _drag(tester, kind: PointerDeviceKind.mouse, buttons: kPrimaryButton);
@@ -521,45 +289,40 @@ void main() {
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(controller.scale, closeTo(beforeWheelScale + 0.06, 1e-9));
-    expect(ownership, [true, false]);
   });
 
-  testWidgets(
-    'first tool touch stops inertia and coincident touches stay finite',
-    (tester) async {
-      final controller = LazyCanvasController();
-      await _pumpCanvas(
-        tester,
-        controller,
-        touchNavigationMode: TouchNavigationMode.twoFinger,
-      );
-      controller.onScaleStart(ScaleStartDetails(focalPoint: Offset.zero));
-      controller.onScaleEnd(
-        ScaleEndDetails(
-          velocity: const Velocity(pixelsPerSecond: Offset(1000, 0)),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      final first = await tester.startGesture(
-        const Offset(200, 200),
-        pointer: 1,
-      );
-      final stopped = controller.offset;
-      await tester.pump(const Duration(seconds: 1));
-      expect(controller.offset, stopped);
-      final second = await tester.startGesture(
-        const Offset(200, 200),
-        pointer: 2,
-      );
-      await second.moveBy(const Offset(40, 0));
-      expect(controller.offset, stopped);
-      await second.moveBy(const Offset(40, 0));
-      expect(controller.scale.isFinite, isTrue);
-      expect(controller.scale, greaterThan(0));
-      await first.up();
-      await second.up();
-    },
-  );
+  testWidgets('first valid touch stops animation before raw down delivery', (
+    tester,
+  ) async {
+    final events = <String>[];
+    final controller = _RecordingController(
+      events,
+      rawPointerDownListener: (_) => events.add('raw down'),
+    );
+    await _pumpCanvas(tester, controller);
+    final animation = controller.animateToOffsetAndScale(
+      offset: const Offset(100, 0),
+      scale: 1,
+      duration: const Duration(seconds: 1),
+      curve: Curves.linear,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final offsetBeforeTouch = controller.offset;
+    expect(offsetBeforeTouch.dx, greaterThan(0));
+    expect(offsetBeforeTouch.dx, lessThan(100));
+
+    events.clear();
+    final touch = await tester.startGesture(const Offset(200, 200), pointer: 1);
+    expect(events.take(2), ['stop', 'raw down']);
+    await touch.up();
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.offset, offsetBeforeTouch);
+
+    await tester.pumpWidget(const SizedBox());
+    await animation;
+    controller.dispose();
+  });
 
   testWidgets('configures mouse pan buttons without affecting touch', (
     tester,

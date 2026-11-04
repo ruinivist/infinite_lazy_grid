@@ -166,46 +166,33 @@ await controller.animateToOffsetAndScale(
 Drag scrolling has inertia by default. Set `inertiaEnabled: false` to disable
 it, or adjust `inertiaFrictionCoefficient` to tune how quickly it settles.
 
-### Touch navigation and application tools
+### Input and viewport overlays
 
-`LazyCanvas` defaults to one-finger touch navigation. For an editor where one
-finger draws or moves an object, use `TouchNavigationMode.twoFinger`. The first
-two fingers then pan and pinch-zoom; additional contacts are ignored, and stylus
-input stays available to tools.
-Mouse navigation is controlled separately by `mousePanButtons`, and trackpad
-and wheel navigation remain available in either touch mode.
+Touch uses Flutter's scale gesture recognizer: one finger pans and two fingers
+pan and pinch-zoom. Touch gestures participate in Flutter's normal gesture
+arena; `LazyCanvas` has no two-finger takeover mode or touch-ownership callback.
+Stylus and inverted-stylus pointers are excluded from the canvas scale
+recognizer, so child tools can handle them.
 
-The ownership callback fires synchronously when the second finger lands,
-before the controller's raw down callback or any canvas transform. Cancel the
-unfinished tool operation without committing it, and suppress tool input
-while navigation owns the sequence:
+Mouse dragging pans with the primary button by default. Configure the accepted
+buttons with `mousePanButtons`, for example:
 
 ```dart
-bool touchNavigationActive = false;
-
-void onToolPointerDown(PointerDownEvent event) {
-  if (touchNavigationActive) return;
-  // Start the application's tool operation.
-}
-
 LazyCanvas(
   controller: controller,
-  touchNavigationMode: TouchNavigationMode.twoFinger,
   mousePanButtons: kSecondaryMouseButton | kMiddleMouseButton,
-  onTouchNavigationChanged: (active) {
-    touchNavigationActive = active;
-    if (active) {
-      // Discard the unfinished tool operation; clear its preview/pointer.
-    }
-  },
-);
+)
 ```
 
-Apply the same guard to tool move/up handlers and child drag callbacks. Raw
-pointer events still arrive, and child gesture recognizers are not canceled
-automatically. Navigation can take over even after a child has won a drag.
-Keep interrupted pointers suppressed through their final event dispatch:
-ownership can become false before a child's final-up tap callback runs.
+Trackpad pan and zoom use Flutter's pointer pan/zoom gestures. A vertical wheel
+scroll pans the canvas; Ctrl+wheel zooms around the pointer. A nested child
+scrollable can consume wheel input instead of the canvas. To replace the
+canvas's default vertical wheel scrolling, provide `onPointerScroll`; it
+receives the controller and vertical delta:
+
+```dart
+onPointerScroll: (controller, delta) => controller.scrollBy(delta * 2),
+```
 
 Use `viewportBuilder` to put floating object controls in the same gesture
 region. An overlay outside `LazyCanvas` will not contribute touches:
@@ -219,27 +206,7 @@ viewportBuilder: (context, viewport) => Overlay.wrap(
 Keep the supplied viewport at the region's origin and original size. A local
 `Overlay` also keeps descendant overlay portals in that gesture region.
 
-Touch movement is coordinated with display frames so separately delivered finger
-updates cannot produce a temporary zoom pulse. A lone update waits at most one
-extra display frame for its partner; newer input cannot extend that deadline.
-Both pan and zoom stay available throughout the gesture. A stationary finger
-anchors the canvas point beneath it; otherwise the centroid is the anchor.
-Rotation without a change in separation or centroid leaves the view unchanged.
-
-Coincident contacts still pan. An initially coincident pair establishes its
-zoom baseline on separation without changing zoom or losing centroid movement.
-Once established, that baseline survives contacts meeting again. Zoom stays
-within controller limits while panning continues. Without a configured minimum,
-coincident contacts retain the last positive scale until they separate.
-
-When either original finger lifts or cancels, queued received motion is applied
-and the canvas freezes. Ownership remains active until **all** touches release
-or cancel. An extra or replacement finger cannot restart navigation during this
-release period. No inertia starts at the end of this two-finger sequence.
-Changing the mode during a touch sequence takes effect on the next sequence.
-Replacing the controller or disposing the canvas cancels queued touch updates.
-
-The first touch stops existing viewport animation. Call
+The first valid touch down stops existing viewport animation. Call
 `controller.stopAnimation()` to stop inertia or an animated transition
 explicitly without changing the current viewport.
 

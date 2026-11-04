@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart'; // HardwareKeyboard, LogicalKeyboardKey
 import 'package:flutter/gestures.dart'; // PointerScrollEvent
 import '../utils/styles.dart';
@@ -9,9 +8,6 @@ import 'background.dart';
 import 'controller/controller.dart';
 
 part 'debug.dart';
-
-/// Determines whether a touch drag navigates or remains available to app tools.
-enum TouchNavigationMode { oneFinger, twoFinger }
 
 /// An infinite canvas that places all the children at the specified positions.
 /// Needs a [LazyCanvasController] to control the canvas and a [CanvasBackground] to draw the background.
@@ -23,17 +19,6 @@ class LazyCanvas extends StatefulWidget {
   /// Does not change controller order or remount keyed child state.
   final CanvasChildId? foregroundChildId;
 
-  /// Selects touch navigation for the next sequence; defaults to one finger.
-  /// Two-finger mode keeps the original pair and ignores additional contacts.
-  /// Movement is frame-coordinated, with at most one extra frame for lone updates.
-  final TouchNavigationMode touchNavigationMode;
-
-  /// Reports two-finger ownership before raw down delivery or canvas movement.
-  /// Remains true until all touches release, even after navigation freezes.
-  /// Consumers must cancel their tool operation and suppress further tool input;
-  /// raw events and child gestures are not automatically canceled.
-  final ValueChanged<bool>? onTouchNavigationChanged;
-
   /// Composes the viewport and app overlays inside the canvas gesture region.
   /// Keep the supplied viewport at the region's origin and original size.
   final Widget Function(BuildContext context, Widget viewport)? viewportBuilder;
@@ -44,8 +29,6 @@ class LazyCanvas extends StatefulWidget {
     required this.controller,
     this.mousePanButtons = kPrimaryMouseButton,
     this.foregroundChildId,
-    this.touchNavigationMode = TouchNavigationMode.oneFinger,
-    this.onTouchNavigationChanged,
     this.viewportBuilder,
     this.onPointerScroll,
     super.key,
@@ -57,19 +40,7 @@ class LazyCanvas extends StatefulWidget {
 
 class _LazyCanvasState extends State<LazyCanvas>
     with TickerProviderStateMixin<LazyCanvas> {
-  final _touches = <int, Offset>{};
-  TouchNavigationMode? _touchMode;
-  bool _touchNavigationActive = false;
-  bool _touchNavigationDraining = false;
-  (int, int)? _touchPair;
-  (Offset, Offset)? _appliedTouches;
-  final _touchSamples = <_TouchSample>[];
-  int? _touchFrameCallback;
-  double _touchInitialSpan = 0;
-  double _touchBaseScale = 1;
-
-  TouchNavigationMode get _effectiveTouchMode =>
-      _touchMode ?? widget.touchNavigationMode;
+  final _touchPointerIds = <int>{};
 
   @override
   void initState() {
@@ -81,9 +52,6 @@ class _LazyCanvasState extends State<LazyCanvas>
   void didUpdateWidget(covariant LazyCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      // A replacement controller must not inherit an unfinished transform.
-      _touchNavigationDraining = _touchNavigationActive;
-      _cancelTouchFrame();
       oldWidget.controller.setTickerProvider(null);
       widget.controller.setTickerProvider(this);
     }
@@ -91,7 +59,6 @@ class _LazyCanvasState extends State<LazyCanvas>
 
   @override
   void dispose() {
-    _cancelTouchFrame();
     widget.controller.setTickerProvider(null);
     super.dispose();
   }
@@ -163,7 +130,6 @@ class _LazyCanvasState extends State<LazyCanvas>
               GestureRecognizerFactoryWithHandlers<
                 _NonMouseScaleGestureRecognizer
               >(_NonMouseScaleGestureRecognizer.new, (recognizer) {
-                recognizer.touchNavigationMode = () => _effectiveTouchMode;
                 _configureScaleRecognizer(recognizer);
               }),
           _MouseScaleGestureRecognizer:
@@ -241,167 +207,28 @@ class _LazyCanvasState extends State<LazyCanvas>
       ..onEnd = widget.controller.onScaleEnd;
   }
 
-  /// Coordinates raw touches independently of a child's gesture-arena result.
-  /// Only the opt-in two-finger mode transforms the canvas here.
   void _handleTouch(PointerEvent event) {
     if (event.kind != PointerDeviceKind.touch) return;
     if (event is PointerDownEvent) {
       if (!event.localPosition.isFinite) return;
-      if (_touches.isEmpty) {
-        _touchMode = widget.touchNavigationMode;
+      if (_touchPointerIds.isEmpty) {
         widget.controller.stopAnimation();
       }
-      _touches[event.pointer] = event.localPosition;
-      if (_effectiveTouchMode == TouchNavigationMode.twoFinger &&
-          !_touchNavigationActive &&
-          !_touchNavigationDraining &&
-          _touches.length == 2) {
-        _touchPair = (_touches.keys.first, _touches.keys.last);
-        final positions = (_touches.values.first, _touches.values.last);
-        _appliedTouches = positions;
-        _touchInitialSpan = (positions.$2 - positions.$1).distance;
-        _touchBaseScale = widget.controller.scale;
-        _touchNavigationActive = true;
-        widget.onTouchNavigationChanged?.call(true);
-        widget.controller.onScaleStart(
-          ScaleStartDetails(
-            localFocalPoint: (_appliedTouches!.$1 + _appliedTouches!.$2) / 2,
-            pointerCount: 2,
-            kind: PointerDeviceKind.touch,
-          ),
-        );
-      }
+      _touchPointerIds.add(event.pointer);
       return;
     }
-    if (!_touches.containsKey(event.pointer)) return;
-    final pair = _touchPair;
-    final isNavigationPointer =
-        pair != null && (event.pointer == pair.$1 || event.pointer == pair.$2);
-    if (event is PointerMoveEvent) {
-      if (!event.localPosition.isFinite ||
-          event.localPosition == _touches[event.pointer]) {
-        return;
-      }
-      _touches[event.pointer] = event.localPosition;
-      if (!isNavigationPointer || _touchNavigationDraining) return;
-      final positions = (_touches[pair.$1]!, _touches[pair.$2]!);
-      final previous = _touchSamples.lastOrNull;
-      if (previous != null &&
-          !previous.paired &&
-          previous.pointer != event.pointer) {
-        previous.positions = positions;
-        previous.paired = true;
-      } else {
-        _touchSamples.add(_TouchSample(positions, event.pointer));
-      }
-      _scheduleTouchFrame();
-      return;
-    }
-    if (event is! PointerUpEvent && event is! PointerCancelEvent) return;
-    if (isNavigationPointer && !_touchNavigationDraining) {
-      // Release completes the received sample; never lose its final movement.
-      if (_touchSamples.isNotEmpty) {
-        _applyTouchPositions(_touchSamples.last.positions);
-      }
-      _cancelTouchFrame();
-      _touchNavigationDraining = true;
-    }
-    _touches.remove(event.pointer);
-    if (_touches.isEmpty) {
-      _touchMode = null;
-      _touchPair = null;
-      _appliedTouches = null;
-      _touchNavigationDraining = false;
-      if (_touchNavigationActive) {
-        _touchNavigationActive = false;
-        widget.onTouchNavigationChanged?.call(false);
-      }
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _touchPointerIds.remove(event.pointer);
     }
   }
-
-  void _scheduleTouchFrame() {
-    _touchFrameCallback ??= SchedulerBinding.instance.scheduleFrameCallback((
-      _,
-    ) {
-      _touchFrameCallback = null;
-      var ready = -1;
-      for (var i = 0; i < _touchSamples.length; i++) {
-        final sample = _touchSamples[i];
-        // A lone update could still be half a pan. Its deadline never renews.
-        if (sample.waited || sample.paired) ready = i;
-        sample.waited = true;
-      }
-      if (ready >= 0) {
-        final positions = _touchSamples[ready].positions;
-        _touchSamples.removeRange(0, ready + 1);
-        _applyTouchPositions(positions);
-      }
-      if (_touchSamples.isNotEmpty) _scheduleTouchFrame();
-    });
-  }
-
-  void _cancelTouchFrame() {
-    if (_touchFrameCallback case final id?) {
-      SchedulerBinding.instance.cancelFrameCallbackWithId(id);
-      _touchFrameCallback = null;
-    }
-    _touchSamples.clear();
-  }
-
-  void _applyTouchPositions((Offset, Offset) positions) {
-    final previous = _appliedTouches!;
-    final span = (positions.$2 - positions.$1).distance;
-    if (!span.isFinite) return;
-    final hasBaseline = _touchInitialSpan > 0;
-    var focalPoint = (positions.$1 + positions.$2) / 2;
-    var previousFocalPoint = (previous.$1 + previous.$2) / 2;
-    if (hasBaseline && positions.$1 == previous.$1) {
-      focalPoint = previousFocalPoint = positions.$1;
-    } else if (hasBaseline && positions.$2 == previous.$2) {
-      focalPoint = previousFocalPoint = positions.$2;
-    }
-    var ratio = hasBaseline ? span / _touchInitialSpan : 1.0;
-    if (!ratio.isFinite || (ratio == 0 && widget.controller.minScale == null)) {
-      ratio = widget.controller.scale / _touchBaseScale;
-    }
-    widget.controller.onScaleUpdate(
-      ScaleUpdateDetails(
-        localFocalPoint: focalPoint,
-        focalPoint: focalPoint,
-        focalPointDelta: focalPoint - previousFocalPoint,
-        scale: ratio,
-        pointerCount: 2,
-      ),
-    );
-    _appliedTouches = positions;
-    if (!hasBaseline && span > 0) {
-      _touchInitialSpan = span;
-      _touchBaseScale = widget.controller.scale;
-      widget.controller.onScaleStart(
-        ScaleStartDetails(localFocalPoint: focalPoint, pointerCount: 2),
-      );
-    }
-  }
-}
-
-class _TouchSample {
-  _TouchSample(this.positions, this.pointer);
-  (Offset, Offset) positions;
-  final int pointer;
-  bool paired = false;
-  bool waited = false;
 }
 
 class _NonMouseScaleGestureRecognizer extends ScaleGestureRecognizer {
-  late TouchNavigationMode Function() touchNavigationMode;
-
   @override
   bool isPointerAllowed(PointerDownEvent event) =>
       event.kind != PointerDeviceKind.mouse &&
       event.kind != PointerDeviceKind.stylus &&
       event.kind != PointerDeviceKind.invertedStylus &&
-      (event.kind != PointerDeviceKind.touch ||
-          touchNavigationMode() == TouchNavigationMode.oneFinger) &&
       super.isPointerAllowed(event);
 }
 
