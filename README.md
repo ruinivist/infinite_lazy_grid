@@ -56,6 +56,15 @@ class _DemoCanvasState extends State<DemoCanvas> {
 }
 ```
 
+## Migrating from 2.x
+
+Upgrade to `infinite_lazy_grid: ^3.0.0` and remove `touchNavigationMode` and
+`onTouchNavigationChanged` from `LazyCanvas`. Touch pan and pinch now use
+Flutter's standard gestures; `TouchNavigationMode` is no longer available.
+
+> the whole of `touchNavigationMode` was a mistake, partly due to my llm psychosis.
+> libraries should not make such weirdly opinionated decisions
+
 ## Migrating from 1.x
 
 Upgrade to `infinite_lazy_grid: ^2.0.0`:
@@ -63,8 +72,7 @@ Upgrade to `infinite_lazy_grid: ^2.0.0`:
 - `updatePosition(id, position)` → `update(id, position: position)`.
 - `updateChildWidget(id, widget)` → `update(id, widget: widget)`.
 - `update()` now returns a boolean.
-- Replace `buildCacheExtent`/`setBuildCacheExtent` with `buildExtentMultiplier` at construction. Its default remains `2`, which gives twice the viewport height; horizontal padding also has a 200 logical screen pixel minimum per side by default.
-- `minHorizontalBuildPadding` is a final `double` constructor parameter, defaulting to `200` logical screen pixels per side. It must be finite and nonnegative or construction throws `ArgumentError`. Set it to `0` to opt out of the minimum.
+- Replace `buildCacheExtent`/`setBuildCacheExtent` with `buildExtentMultiplier` at construction. Default: twice the viewport.
 - `ChildInfo` is now read-only ( as it should've been ). Its constructor needs `rotation` and nullable `childSize`. Its `child` is unwrapped.
 
 ## Usage
@@ -215,7 +223,7 @@ explicitly without changing the current viewport.
 
 ```dart
 background: const NoBackground();
-background: const SingleColorBackround(Colors.white);
+background: const SingleColorBackground(Colors.white);
 background: const DotGridBackground(spacing: 60, size: 2.0);
 ```
 

@@ -1,4 +1,4 @@
-## Unreleased
+## 3.0.0
 
 - **Breaking:** Remove `TouchNavigationMode` and the `touchNavigationMode` and
   `onTouchNavigationChanged` arguments from `LazyCanvas`. Touch drag and pinch
