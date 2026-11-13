@@ -1,0 +1,32 @@
+# Preserve the root .gitignore exclusions.
+
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+*.iml
+*.ipr
+*.iws
+.idea/
+/pubspec.lock
+**/doc/api/
+.dart_tool/
+.wrangler/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+LOCAL_README.md
+.codex
+
+# Keep internal documentation out of the published package.
+
+/docs/
+AGENTS.md
+TASK.md
+tasks.md

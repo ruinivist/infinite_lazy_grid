@@ -8,7 +8,6 @@
 .buildlog/
 .history
 .svn/
-migrate_working_dir/
 
 # IntelliJ related
 *.iml
@@ -33,5 +32,4 @@ build/
 
 # local readme stuff
 LOCAL_README.md
-ISSUES.md
 .codex
